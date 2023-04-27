@@ -10,7 +10,7 @@ class Nassir_clustering:
     """Clustering algorithm.
 
     Semi-supervised clustering algorithm that uses Nassir's anomaly detection 
-    algorithm at its core to eject or claima anomalies to grow clusters. 
+    algorithm at its core to eject or claim anomalies to grow clusters. 
     """
 
     def __init__(self):
