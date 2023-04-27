@@ -1,8 +1,8 @@
-# clustering
+# Semi-supervised clustering 
 This project implements the semi-supervised clustering algorithm. The associated publication can be found at: XXX
 
 The clustering algorithm takes as input an array of examples (rows) with numerical feature values (columns). 
-An additional column in the input must hold the sample of labels obtained externally. The labels must be integers
+An additional column in the input must hold the sample of labels (seeds) obtained externally. The labels must be integers
 with the value -1 reserved for examples whose labels are unknown. It is recommended that at least 10 examples are 
 labelled for a particular group. 
 
