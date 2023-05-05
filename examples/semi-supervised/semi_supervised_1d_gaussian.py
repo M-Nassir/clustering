@@ -26,8 +26,8 @@ from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import NearestNeighbors
 from sklearn.cluster import AffinityPropagation
 from sklearn.cluster import SpectralClustering
-from pyclustering.cluster import cluster_visualizer
-from pyclustering.cluster.clarans import clarans
+# from pyclustering.cluster import cluster_visualizer
+# from pyclustering.cluster.clarans import clarans
 from sklearn.cluster import MeanShift
 from sklearn.cluster import AgglomerativeClustering
 
