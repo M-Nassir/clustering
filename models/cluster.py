@@ -115,10 +115,10 @@ class Nassir_clustering:
                 clf.fit_predict(X_sub)
 
                 # anomalies -> -2 (eject anomalies and put into temp. category)
-                y[ind] = np.where(clf.labels_ == 0, i, -2)
+                y[ind] = np.where(clf.labels_ == 0, i, -1)
 
                 # if anomalies have been ejected, modify the flag
-                if np.any(clf.labels_ == -2):
+                if np.any(clf.labels_ != 0):
                     cco = True
 
                     # re-fit clf to group without anomalies
@@ -148,37 +148,37 @@ class Nassir_clustering:
                         if np.any(clf.labels_ == 0):
                             cco = True
 
-        # once initial clustering has finished, let each cluster consider each
-        # point that has -2 label only once more.
-        for i in self.cluster_numbers_:
+        # # once initial clustering has finished, let each cluster consider each
+        # # point that has -2 label only once more.
+        # for i in self.cluster_numbers_:
 
-            if i == -1:
-                continue
+        #     if i == -1:
+        #         continue
 
-            # get the cluster data points only
-            X_sub = X[y == i]
+        #     # get the cluster data points only
+        #     X_sub = X[y == i]
 
-            # get all the remaining anomalous points
-            apl = X[y == -2]
-            ind_anomalous_left = np.where(y == -2)
+        #     # get all the remaining anomalous points
+        #     apl = X[y == -2]
+        #     ind_anomalous_left = np.where(y == -2)
 
-            # check if there are any left over anomalies
-            if (apl.size and apl.ndim) <= 0:
-                break
+        #     # check if there are any left over anomalies
+        #     if (apl.size and apl.ndim) <= 0:
+        #         break
 
-            # check if group is non-empty and has more than 2 elements
-            if (X_sub.shape[0] >= 2) and (X_sub.size and X_sub.ndim) > 0:
+        #     # check if group is non-empty and has more than 2 elements
+        #     if (X_sub.shape[0] >= 2) and (X_sub.size and X_sub.ndim) > 0:
 
-                clf = Perception()
-                clf.fit(X_sub)
+        #         clf = Perception()
+        #         clf.fit(X_sub)
 
-                clf.predict(apl)
+        #         clf.predict(apl)
 
-                # change label if it belongs to cluster, otherwise leave
-                y[ind_anomalous_left] = np.where(clf.labels_ == 0, i, -2)
+        #         # change label if it belongs to cluster, otherwise leave
+        #         y[ind_anomalous_left] = np.where(clf.labels_ == 0, i, -2)
 
-        # for temp anomalies not claimed by any cluster, convert to -1 label
-        y[y == -2] = -1
+        # # for temp anomalies not claimed by any cluster, convert to -1 label
+        # y[y == -2] = -1
 
         # finally let each cluster have chance to claim anomalies in case
         # they have changed after temp anomaly assignment changes.
