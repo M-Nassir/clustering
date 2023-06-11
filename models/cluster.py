@@ -4,6 +4,8 @@ from perception import Perception
 
 # TODO: fit/predict documentation
 # TODO: predict method using scores
+# TODO: maybe put check which clusters are tightest after every round? or will it be too slow
+# without much improvement?
 
 
 class Nassir_clustering:
@@ -57,6 +59,9 @@ class Nassir_clustering:
         # get and sort the unique cluster labels
         self.cluster_numbers_ = np.sort(np.unique(y))
 
+        # set maximum number of iterations
+        self.max_n_iterations_ = 1000
+
         # ------------------------------------------------------------------
         # sort cluster number order by minimum sum of squared error
         # ------------------------------------------------------------------
@@ -86,15 +91,15 @@ class Nassir_clustering:
         # ------------------------------------------------------------------
 
         # set counter for tracking validation
-        cnt = 0
+        itr = 0
 
         # do loop until no point assignment changes occur
         cco = True
-        while cco is True:
+        while cco is True and itr < self.max_n_iterations_:
 
             # testing tracking; remove in future
-            cnt = cnt + 1
-            print(cnt)
+            itr = itr + 1
+            print(itr)
 
             # this will be reset to true if a cluster assignment change occurs
             cco = False
