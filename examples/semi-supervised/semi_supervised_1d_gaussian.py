@@ -90,8 +90,10 @@ data_holder = []
 # label number
 i = 0
 
+params = [(0, 1), (50, 3), (100, 6)]
+
 # create three gaussian clusters (these will naturally contain anomalies)
-for mu, sig in [(0, 1), (50, 1), (100, 1)]:
+for mu, sig in params:
 
     temp_data = np.expand_dims(np.random.normal(loc=mu, scale=sig,
                                                 size=10000), axis=1)
@@ -114,6 +116,7 @@ data_anomalies_mislablled = np.array([
     [8.3, -1],
     [25, -1],
     [40, -1],
+    [70, -1],
     [80, -1],
     [95, -1],
     [112, 2],
@@ -207,7 +210,7 @@ for col in cols:
                     hue=df2[col], palette=colors,
                     axes=axes,)
 
-    axes.legend(title='Labels:')
+    axes.legend(title='Cluster Labels:')
 
     legend = axes.legend_
     legend.get_texts()[0].set_text('Anomalies')
@@ -252,7 +255,7 @@ plt.ylabel('Frequency')
 sns.scatterplot(x=df2['X'], y=np.zeros_like(df2['X'])+6.15,
                 hue=cluster_labels, palette=colors, ax=axes)
 
-axes.legend(title='Labels:')
+axes.legend(title='Cluster Labels:')
 
 legend = axes.legend_
 legend.get_texts()[0].set_text('Anomalies')
@@ -262,7 +265,7 @@ legend.get_texts()[3].set_text('Cluster 2')
 
 axes.set_xlabel('')
 axes.set_yticks([])
-#axes.set_title("Nassir's Clustering")
+# axes.set_title("Nassir's Clustering")
 
 # We change the fontsize of minor ticks label
 axes.tick_params(axis='both', which='major', labelsize=14)
@@ -279,8 +282,8 @@ print(classification_report(df2.y_true, df2.Nassir))
 print("adjusted_rand_score: {}".   format(
     metrics.adjusted_rand_score(df2.y_true, cluster_labels)))
 
-accuracy, conf_matrix = cluster_acc(df2.y_true, df2['Nassir'])
-print("accuracy: {}".format(accuracy))
+# accuracy, conf_matrix = cluster_acc(df2.y_true, df2['Nassir'])
+# print("accuracy: {}".format(accuracy))
 
 print("accuracy: {}".format(accuracy_score(df2.y_true, df2['Nassir'])))
 
@@ -321,8 +324,8 @@ if do_kmeans is True:
 
     # axes.set_xlabel()
     axes.set_yticks([])
-    #axes.set_title('KMeans Clustering')
-    axes.legend(title='Labels:')
+    # axes.set_title('KMeans Clustering')
+    axes.legend(title='Cluster Labels:')
     legend = axes.legend_
     legend.get_texts()[0].set_text('Cluster 0')
     legend.get_texts()[1].set_text('Cluster 1')
@@ -355,7 +358,7 @@ if do_kmeans is True:
 # %% DBSCAN
 if do_dbscan is True:
 
-    msps = 8
+    msps = 10
     nearest_neighbors = NearestNeighbors(n_neighbors=msps)
     neighbors = nearest_neighbors.fit(df2['X'].values.reshape(-1, 1))
 
@@ -379,7 +382,8 @@ if do_dbscan is True:
     print(distances[knee.knee])
 
     eps_knee = distances[knee.knee]  # not good results
-    eps_knee = 0.049  # manual knee locator using graph
+    # eps_knee = 0.049  # manual knee locator using graph
+    eps_knee = 0.114
 
     start_time = time.process_time()
     db = DBSCAN(eps=eps_knee, min_samples=msps).fit(
@@ -397,7 +401,7 @@ if do_dbscan is True:
 
     axes.set_xlabel('')
     axes.set_yticks([])
-    #axes.set_title('DBSCAN Clustering')
+    # axes.set_title('DBSCAN Clustering')
     axes.legend(loc="lower left", ncol=4, title='Cluster Labels:')
 
     # get the labels in right order
