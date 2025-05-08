@@ -3,7 +3,7 @@ import pandas as pd
 from perception import Perception
 
 # TODO: fit/predict documentation
-# TODO: predict method using scores with respect to clusters
+# TODO: finish predict method using scores with respect to clusters
 # TODO: maybe put check which clusters are tightest after every round? or will it be too slow
 # without much improvement?
 
@@ -208,10 +208,8 @@ class Nassir_clustering:
         return y
 
     def predict(self, X):
-
-        # TODO: prediction needs to be done by scores with respect to the
-        # cluster, but it should be done by ...
         """ Predict cluster labels and associated score over new data.
+
         Input
         -------
         Array of values of same dimension as data upon which classifier has
@@ -221,7 +219,6 @@ class Nassir_clustering:
         -------
         Array of cluster numbers/anomaly labels for each observation.
         Array of cluster association score/anomaly score for each observation
-
         """
         assert type(X) == np.ndarray, "input_array must by a numpy array"
 
