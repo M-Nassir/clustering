@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from perception import Perception
+from perception_nassir import Perception
 
 # TODO: fit/predict documentation
 # TODO: finish predict method using scores with respect to clusters
