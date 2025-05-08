@@ -1,5 +1,5 @@
 # Semi-supervised clustering 
-This project implements the semi-supervised clustering algorithm. The associated publication and details of the method and algorithm can be found at: XXX
+This project implements the semi-supervised clustering algorithm. The associated publication and details of the method and algorithm can be found at: https://arxiv.org/abs/2306.06974
 
 The clustering algorithm takes as input an array of examples (rows) with numerical feature values (columns). 
 An additional column in the input must hold the sample of labels (seeds) obtained externally. The labels must be integers
