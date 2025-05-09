@@ -1,17 +1,16 @@
-# Semi-supervised clustering 
-This project implements the semi-supervised clustering algorithm. The associated publication and details of the method and algorithm can be found at: https://arxiv.org/abs/2306.06974
+# Semi-Supervised Clustering
+This project implements a semi-supervised clustering algorithm, based on the method described in the following publication:
+https://arxiv.org/abs/2306.06974
 
-The clustering algorithm takes as input an array of examples (rows) with numerical feature values (columns). 
-An additional column in the input must hold the sample of labels (seeds) obtained externally. The labels must be integers
-with the value -1 reserved for examples whose labels are unknown. It is recommended that at least 10 examples are 
-labelled for a particular group. 
+The algorithm takes as input a matrix of numerical features, where each row represents an example and each column a feature. An additional column must contain partial labels (seeds), which are externally provided. Labels must be integers, with -1 reserved for unlabelled examples.
 
-The core of the clustering algorithm is Nassir's anomaly detection algorithm (called the perception). This ejects 
-and adds points to a cluster, starting with the seeds of labelled data from a group. By iterating over the 
-samples of labels it effectively grows clusters until no changes occur.
+It is recommended to provide at least 10 labelled examples per class to ensure effective clustering.
 
-The clustering algorithm works with one-dimensional and multi-dimensional data. 
+At its core, the algorithm uses the Perception anomaly detection algorithm. Starting from the initial labelled seeds, it iteratively adds or ejects points from each cluster based on their consistency with the group. This process continues until the clusters stabilise.
 
-It will return labels for every example. The integer value -1 is reserved for the unknown or anomalous class; any
-example that is deemed not to belong to any of the known clusters is deemed anomalous. These can be inspected in
-subsequent rounds of analysis and then clustering run again until the user is satisfied. 
+Key features:
+Supports both one-dimensional and multi-dimensional numerical data.
+Assigns a cluster label to every input example.
+Uses the label -1 to indicate anomalous or unassigned examples.
+These anomalous examples can be reviewed in follow-up analysis, allowing users to refine labels and re-run clustering in iterative cycles.
+
