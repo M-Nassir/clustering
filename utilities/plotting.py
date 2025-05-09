@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-def plot_clusters(df, feature_columns, label_column, title=None, colors=None):
+def plot_clusters(df, feature_columns, label_column, title=None, colors=None, show_seeds_only=False):
     """
     Generic cluster plotting function for 1D or 2D data.
 
@@ -14,6 +14,7 @@ def plot_clusters(df, feature_columns, label_column, title=None, colors=None):
     - colors (dict): Optional custom colour palette (label: color).
     """
 
+    # set colors
     if colors is None:
         # CUD colormap: distinct and accessible colours
         cud_palette = ['#E69F00', '#56B4E9', '#009E73', '#F0E442', 
@@ -36,15 +37,33 @@ def plot_clusters(df, feature_columns, label_column, title=None, colors=None):
         valid_labels = [label for label in unique_labels if label != -1]
         colors.update({label: cluster_palette[i] for i, label in enumerate(valid_labels)})
 
-    plt.figure(figsize=(12, 6))
-
     if len(feature_columns) == 1:
-        # 1D plotting
-        x = df[feature_columns[0]]
-        y = np.zeros_like(x) + 0.15  # constant y to align horizontally
-        sns.scatterplot(x=x, y=y, hue=df[label_column], palette=colors, edgecolor='none')
-        plt.yticks([])
-        plt.xlabel(feature_columns[0])
+        # 1D plotting with histogram and overlay
+        xcol = feature_columns[0]
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        if not show_seeds_only:
+            # Plot histogram
+            sns.histplot(df, x=xcol, bins=1000, color='lightgrey', ax=ax)
+            ax.set_ylabel('Frequency')
+            ax.set_xlabel('')
+        
+        # Prepare data to plot (exclude anomalies if requested)
+        plot_df = df.copy()
+        if show_seeds_only:
+            plot_df = plot_df[plot_df[label_column] != -1]
+
+        # Overlay scatterplot of cluster labels
+        sns.scatterplot(
+            x=plot_df[xcol],
+            y=np.full_like(plot_df[xcol], df[xcol].max() * 0.01),
+            hue=plot_df[label_column],
+            palette=colors,
+            ax=ax,
+            legend='full',
+            edgecolor='none'
+        );
+        
     elif len(feature_columns) >= 2:
         # 2D plotting
         sns.scatterplot(
