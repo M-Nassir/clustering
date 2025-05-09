@@ -7,7 +7,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 # %%
-def generate_clustering_1d_gauss_anomalies(seed=42,
+def generate_clustering_1d_gauss_anomalies(random_seed=42,
                                                labelled_percent=0.5,
                                                cluster_params=[(0, 1), (50, 3), (100, 6)],
                                                samples_per_cluster=10000,
@@ -27,7 +27,7 @@ def generate_clustering_1d_gauss_anomalies(seed=42,
     - df (DataFrame): Contains 'X', 'y_true', 'y_live' columns.
     """
 
-    np.random.seed(seed)
+    np.random.seed(random_seed)
 
     # Generate Gaussian clusters
     data_holder = []
@@ -92,76 +92,3 @@ def generate_clustering_1d_gauss_anomalies(seed=42,
     print(f"Percentage of labelled data: {labelled_pct}%")
 
     return df
-
-
-# %%  plot cluster histograms
-def plot_cluster_histograms(df, save_dir=None, save=False,):
-    """
-    Plots histograms and labelled scatter overlays for y_true and y_live.
-
-    Parameters:
-    - df (DataFrame): Must contain 'X', 'y_true', and 'y_live' columns.
-    - save_dir (str): Path to save figures if save=True.
-    - save (bool): Whether to save plots to file.
-    """
-
-    mpl.rcParams['figure.facecolor'] = 'white'
-    plt.rcParams['font.size'] = 14
-
-    # Define consistent colour palette
-    colors = {-1: 'red', 0: 'green', 1: 'blue', 2: 'black',
-              3: 'orange', 4: 'purple', 5: 'brown',
-              6: 'pink', 7: 'cyan', 8: 'darkblue',
-              9: 'violet', 10: 'magenta'}
-
-    label_names = {
-        -1: 'Anomalies',
-         0: 'Cluster 0',
-         1: 'Cluster 1',
-         2: 'Cluster 2',
-         4: 'Cluster 3',
-         5: 'Cluster 4',
-         6: 'Cluster 5',
-         7: 'Cluster 6',
-         8: 'Cluster 7',
-         9: 'Cluster 8',
-         10: 'Cluster 9',
-    }
-
-    for col in ['y_true']:
-        fig, ax = plt.subplots(figsize=(12, 6))
-
-        # Histogram of data distribution
-        sns.histplot(df, x='X', bins=1000, color='lightgrey', ax=ax)
-        ax.set_ylabel('Frequency')
-        ax.set_xlabel('')
-
-        # Overlay scatter plot for labels
-        sns.scatterplot(x=df['X'],
-                        y=np.full_like(df['X'], 4.9),
-                        hue=df[col],
-                        palette=colors,
-                        ax=ax,
-                        legend='full')
-
-        # Set tick parameters
-        ax.set_yticks([])
-        ax.tick_params(axis='both', which='major', labelsize=14)
-
-        # Adjust legend
-        handles, labels = ax.get_legend_handles_labels()
-        new_labels = [label_names.get(int(lbl), f"Cluster {lbl}") for lbl in labels]
-        ax.legend(handles=handles, labels=new_labels, title='Cluster Labels:')
-
-        if save and save_dir is not None:
-            filename = f"{save_dir.rstrip('/')}/1d_gaussian_{col}.png"
-            plt.savefig(filename, bbox_inches='tight')
-
-        plt.show()
-
-# %%
-# df = generate_clustering_1d_gauss_anomalies()
-# plot_cluster_histograms(df,
-#                         save_dir='/Users/nassirmohammad/Google Drive/docs/A_computational_theory_of_clustering/figures/',
-#                         save=False)
-# %%
