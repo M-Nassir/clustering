@@ -1,7 +1,26 @@
+"""
+Clustering Evaluation Pipeline
+------------------------------
+
+This script evaluates multiple clustering algorithms (unsupervised, semi-supervised, and deep clustering)
+on various datasets (synthetic 1D/2D, CSV-based) with support for both labelled and partially-labelled data.
+
+Key features:
+- Generates or loads datasets and applies labelling for semi-supervised learning.
+- Runs selected clustering methods (e.g., KMeans, DBSCAN, HDBSCAN, Seeded KMeans, custom methods, DEC).
+- Computes runtime and clustering quality metrics:
+    - Supervised: ARI, NMI, Homogeneity, Purity, Completeness, V-measure
+    - Unsupervised: Silhouette Score, Davies-Bouldin, Calinski-Harabasz
+- Plots clustering results with true and predicted labels.
+- Saves results (metrics and runtimes) as CSVs in the results/ folder.
+
+Adaptable for research on clustering algorithm performance and semi-supervised clustering evaluation.
+"""
+
 # %%
 # ---------------------------- Imports and setup -----------------
 import os
-import sys
+# import sys
 import time
 import pandas as pd
 import numpy as np
@@ -15,11 +34,13 @@ import numpy as np
 #     sys.path.insert(0, root_path)
 
 # results_folder = os.path.abspath(os.path.join(os.getcwd(), '../../results'))
-    
+
+# Synthetic data generators    
 from data.synthetic.one_dim_data import generate_clustering_1d_data
 from data.synthetic.one_dim_data_gauss import generate_clustering_1d_gauss_anomalies
 from data.synthetic.two_dim_data_gauss import generate_clustering_2d_gauss_data
 
+# Clustering methods
 from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
     agglomerative_clustering, gmm_clustering, spectral_clustering,
@@ -27,10 +48,10 @@ from clustering_methods import (
     seeded_k_means_clustering, novel_clustering
 )
 
-# Plotting tools
+# Plotting
 from utilities.plotting import plot_clusters
 
-# Clustering evaluation metrics
+# Evaluation metrics
 from utilities.evaluation_metrics import (
     compute_purity, compute_homogeneity, compute_ari,
     compute_completeness, compute_v_measure, compute_nmi,
@@ -38,21 +59,24 @@ from utilities.evaluation_metrics import (
     compute_calinski_harabasz_score
 )
 
+# DEC method
 from dec_clustering import run_dec_clustering_from_dataframe
 
+# Output directory
 results_folder = 'results'
 
 # %%
-# ---------------------------- Data Setup ---------------------------------
+# ---------------------------- Dataset Configuration ------------------------
 
 # Define dataset mode
-mode = "1d_simple"  # Options: "1d_simple", "1d_gauss", "2d_gauss", "from_csv"
+mode = "from_csv"  # Options: "1d_simple", "1d_gauss", "2d_gauss", "from_csv"
 k = None  # Number of clusters (used by some algorithms like k-means, we supply ground truth number)
+plot_title = None
 
-# Load selected dataset and plot
 if mode == "1d_simple":
     k = 3
     df = generate_clustering_1d_data(repeat_const=100, percent_labelled=0.03, random_state=None)
+    plot_title = mode + ' (all data with histogram overlay)'
 
 elif mode == "1d_gauss":
     k = 3
@@ -62,18 +86,20 @@ elif mode == "1d_gauss":
                                                samples_per_cluster=10000,
                                                include_anomaly_cluster=True,
                                                )
+    plot_title = mode + ' (all data with histogram overlay)'
 
 elif mode == "2d_gauss":
     k=5
     df = generate_clustering_2d_gauss_data(n_samples=10000,
                                         n_components=k,
                                         num_features=2,
-                                        rand_seed=0,
+                                        rand_seed=1,
                                         same_density=False,
                                         labelled_fraction=0.01,
                                         add_anomaly_cluster=True,
                                         plot=True,
                                         )
+    plot_title = mode + ' (all data)'
 
 elif mode == "from_csv":
     # Read data from a CSV file
@@ -104,23 +130,21 @@ elif mode == "from_csv":
 
 # Extract feature columns from the DataFrame
 feature_columns = [col for col in df.columns if col not in {'y_true', 'y_live'}]
-
-# assign the dataset name
 dataset_name = mode
 
-plot_clusters(df, feature_columns, label_column='y_true', 
-              title=dataset_name + ' (all data with histogram overlay)', 
-              show_seeds_only=False)
+# Plot dataset
+plot_clusters(df, feature_columns, label_column='y_true', title=plot_title, show_seeds_only=False)
+plot_clusters(df, feature_columns, label_column='y_live', title=dataset_name + ' (seeds only)', show_seeds_only=True)
 
 # %%
-# ---------------------------- Clustering Execution ------------------------
+# ---------------------------- Clustering Algorithm Setup ------------------------
 
 # Flags to enable/disable algorithms
 clustering_flags = {
     'KMeans': False,
     'MeanShift': False,
-    'DBSCAN': False,
-    'HDBSCAN': False,
+    'DBSCAN': True,
+    'HDBSCAN': True,
     'Agglomerative': False,
     'GMM': False,
     'Spectral': False,  # Note: Spectral Clustering may be slow on large datasets
@@ -180,8 +204,8 @@ clustering_configs = {
         'params': {'n_clusters': k, 'target_column': 'y_true', 'seeds':'y_live', 'remap_labels': False}       
     },
     'novel_method': {
-    'function': novel_clustering,
-    'params': {'seeds': 'y_live'}  # Assuming your clustering method uses 'y_live' as seed labels
+        'function': novel_clustering,
+        'params': {'seeds': 'y_live'}  # Assuming your clustering method uses 'y_live' as seed labels
     },
 }
 
@@ -213,7 +237,7 @@ runtime_filename = os.path.join(results_folder, f"runtime_{dataset_name}.csv")
 runtime_df.to_csv(runtime_filename, index=False)
 
 # %%
-# ---------------------------- Supervised Metric Evaluation ------------------------
+# ---------------------------- Supervised Evaluation ------------------------
 
 # Automatically determine enabled clustering methods from flags
 clustering_methods = [name for name, enabled in clustering_flags.items() if enabled]
@@ -254,7 +278,7 @@ supervised_metrics_filename = os.path.join(results_folder, f"supervised_metrics_
 supervised_metrics_df.to_csv(supervised_metrics_filename, index=False)
 
 # %%
-# ---------------------------- Unsupervised Metric Evaluation ------------------------
+# ---------------------------- Unsupervised Evaluation ------------------------
 
 unsupervised_metrics = {
     'Silhouette Score': compute_silhouette_score,
@@ -295,13 +319,10 @@ print(f"\nUnsupervised metrics saved to {unsupervised_metrics_filename}")
 # %%
 # ---------------------------- DEC clustering method ------------------------
 
-# Copy original DataFrame
-df_c = df.copy()
-
 df_dec = run_dec_clustering_from_dataframe(
-    df=df_c,
+    df.copy(),
     target_column='y_true',
-    n_clusters=10,
+    n_clusters=k,
     pretrain_epochs=100,
     train_epochs=100,
     batch_size=256,
