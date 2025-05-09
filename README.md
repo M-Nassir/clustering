@@ -8,9 +8,19 @@ It is recommended to provide at least 10 labelled examples per class to ensure e
 
 At its core, the algorithm uses the Perception anomaly detection algorithm. Starting from the initial labelled seeds, it iteratively adds or ejects points from each cluster based on their consistency with the group. This process continues until the clusters stabilise.
 
+See the getting_started folder for guides containing examples of clustering methods.
+
 Key features:
-Supports both one-dimensional and multi-dimensional numerical data.
-Assigns a cluster label to every input example.
-Uses the label -1 to indicate anomalous or unassigned examples.
-These anomalous examples can be reviewed in follow-up analysis, allowing users to refine labels and re-run clustering in iterative cycles.
+- Supports both one-dimensional and multi-dimensional numerical data.
+- Assigns a cluster label to every input example.
+- Uses the label -1 to indicate anomalous or unassigned examples.
+- These anomalous examples can be reviewed in follow-up analysis, allowing users to refine labels and re-run clustering in iterative cycles.
+
+## Installation
+To install the solution via `pip`, you can use the following command:
+
+```bash
+pip install semi-supervised-clustering
+
+
 
