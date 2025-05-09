@@ -1,4 +1,4 @@
-# Semi-Supervised Clustering
+# A Novel Semi-Supervised Clustering Method
 This project implements a semi-supervised clustering algorithm, based on the method described in the following publication:
 https://arxiv.org/abs/2306.06974
 
@@ -27,5 +27,6 @@ pip install clustering_nassir
 
 ```bash
 pip install clustering_nassir
+from clustering_nassir import novel_clustering
 ```
 
