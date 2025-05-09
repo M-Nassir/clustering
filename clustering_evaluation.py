@@ -4,20 +4,21 @@ import os
 import sys
 import time
 import pandas as pd
+import numpy as np
 
-# Get the current working directory (where the notebook is running from)
-current_dir = os.getcwd()
+# # Get the current working directory (where the notebook is running from)
+# current_dir = os.getcwd()
 
-# Go up 2 levels to reach the 'clustering' project root
-root_path = os.path.abspath(os.path.join(current_dir, '../../'))
-if root_path not in sys.path:
-    sys.path.insert(0, root_path)
+# # Go up 2 levels to reach the 'clustering' project root
+# root_path = os.path.abspath(os.path.join(current_dir, '../../'))
+# if root_path not in sys.path:
+#     sys.path.insert(0, root_path)
 
-results_folder = os.path.abspath(os.path.join(os.getcwd(), '../../results'))
+# results_folder = os.path.abspath(os.path.join(os.getcwd(), '../../results'))
     
-from clustering.data.synthetic.one_dim_data import generate_clustering_1d_data
-from clustering.data.synthetic.one_dim_data_gauss import generate_clustering_1d_gauss_anomalies
-from clustering.data.synthetic.two_dim_data_gauss import generate_clustering_2d_gauss_data
+from data.synthetic.one_dim_data import generate_clustering_1d_data
+from data.synthetic.one_dim_data_gauss import generate_clustering_1d_gauss_anomalies
+from data.synthetic.two_dim_data_gauss import generate_clustering_2d_gauss_data
 
 from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
@@ -27,10 +28,10 @@ from clustering_methods import (
 )
 
 # Plotting tools
-from clustering.utilities.plotting import plot_clusters
+from utilities.plotting import plot_clusters
 
 # Clustering evaluation metrics
-from clustering.utilities.evaluation_metrics import (
+from utilities.evaluation_metrics import (
     compute_purity, compute_homogeneity, compute_ari,
     compute_completeness, compute_v_measure, compute_nmi,
     compute_silhouette_score, compute_davies_bouldin_score,
@@ -39,11 +40,13 @@ from clustering.utilities.evaluation_metrics import (
 
 from dec_clustering import run_dec_clustering_from_dataframe
 
+results_folder = 'results'
+
 # %%
 # ---------------------------- Data Setup ---------------------------------
 
 # Define dataset mode
-mode = "1d_gauss"  # Options: "1d_simple", "1d_gauss", "2d_gauss"
+mode = "1d_simple"  # Options: "1d_simple", "1d_gauss", "2d_gauss", "from_csv"
 k = None  # Number of clusters (used by some algorithms like k-means, we supply ground truth number)
 
 # Load selected dataset and plot
@@ -71,6 +74,33 @@ elif mode == "2d_gauss":
                                         add_anomaly_cluster=True,
                                         plot=True,
                                         )
+
+elif mode == "from_csv":
+    # Read data from a CSV file
+    csv_file_path = "data/Mall_Customers.csv"  # Replace with the actual file path
+    df = pd.read_csv(csv_file_path)
+
+     # Specify the name of the label column ('class' for example)
+    label_column = 'class'  # Replace with the actual label column name
+
+    # Check if the label column exists and rename it to 'y_true' for consistency
+    if label_column not in df.columns:
+        raise ValueError(f"The specified label column '{label_column}' was not found in the dataset.")
+
+    # Rename the label column to 'y_true' to ensure compatibility with the rest of the code
+    df.rename(columns={label_column: 'y_true'}, inplace=True)
+
+    # Set k as the number of unique values in the 'y_true' column (this determines the number of clusters)
+    k = df['y_true'].nunique()
+
+    # Randomly label a portion of the data as labeled seeds
+    percent_labelled = 0.05  # Percentage of data to be labeled
+    n_labelled = int(len(df) * percent_labelled)
+    
+    # Randomly choose `n_labelled` rows to have labels, the rest will remain unlabeled (marked as -1)
+    labelled_indices = np.random.choice(df.index, size=n_labelled, replace=False)
+    df['y_live'] = -1  # Initially mark all as unlabeled
+    df.loc[labelled_indices, 'y_live'] = df.loc[labelled_indices, 'y_true']  # Assign random labels to the seeds
 
 # Extract feature columns from the DataFrame
 feature_columns = [col for col in df.columns if col not in {'y_true', 'y_live'}]
