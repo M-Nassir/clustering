@@ -20,7 +20,12 @@ Key features:
 To install the solution via `pip`, you can use the following command:
 
 ```bash
-pip install semi-supervised-clustering
+pip install clustering_nassir
+```
 
+## Usage
 
+```bash
+pip install clustering_nassir
+```
 
