@@ -44,7 +44,7 @@ from dec_clustering import run_dec_clustering_from_dataframe
 
 # Plotting
 from utilities.plotting import plot_clusters
-from utilities.cluster_utilities import load_and_prepare_dataset 
+from utilities.cluster_utilities import load_and_prepare_dataset
 
 # Evaluation metrics
 from utilities.evaluation_metrics import (
@@ -56,7 +56,14 @@ from utilities.evaluation_metrics import (
 
 # Output directory
 results_folder = 'results'
+os.makedirs(results_folder, exist_ok=True)
 
+# Define save_df helper
+def save_df(df, filename_prefix, dataset_name):
+    filename = os.path.join(results_folder, f"{filename_prefix}_{dataset_name}.csv")
+    df.to_csv(filename, index=False)
+    print(f"{filename_prefix.replace('_', ' ').capitalize()} saved to {filename}")
+        
 # %%
 # ---------------------------- Dataset Configuration ------------------------
 
@@ -135,9 +142,6 @@ clustering_flags = {
     'CDC': False,
 }
 
-# Dictionary to record runtimes
-runtimes = {}
-
 # Clustering method configuration
 clustering_configs = {
     'KMeans': {
@@ -146,7 +150,7 @@ clustering_configs = {
     },
     'MeanShift': {
         'function': meanshift_clustering,
-        'params': {'target_column': 'y_true_', 'remap_labels': True}
+        'params': {'target_column': 'y_true', 'remap_labels': True}
     },
     'DBSCAN': {
         'function': dbscan_clustering,
@@ -186,16 +190,20 @@ clustering_configs = {
     },
 }
 
-# Run each enabled clustering algorithm
-for name, config in clustering_configs.items():
-    if clustering_flags.get(name, False):
-        print(f"Running {name} with params: {config['params']}") 
-        df_c = df.copy()
-        start_time = time.time()
-        df_c = config['function'](df_c, feature_columns, **config['params'])
-        plot_clusters(df_c, feature_columns, label_column=name, title=name)
-        df[name] = df_c[name]
-        runtimes[name] = time.time() - start_time
+def apply_clustering_algorithms(df, configs, flags, features, plot=True):
+    runtimes = {}
+    for name, config in configs.items():
+        if flags.get(name, False):
+            print(f"Running {name} with params: {config['params']}")
+            df_c = df.copy()
+            start = time.time()
+            df[name] = config['function'](df_c, features, **config['params'])[name]
+            if plot:
+                plot_clusters(df, features, label_column=name, title=name)
+            runtimes[name] = time.time() - start
+    return df, runtimes
+
+df, runtimes = apply_clustering_algorithms(df, clustering_configs, clustering_flags, feature_columns, plot=True)
 
 # Convert runtimes dict to DataFrame with dataset name
 runtime_df = pd.DataFrame([
@@ -207,11 +215,7 @@ runtime_df = pd.DataFrame([
 print("\nRuntimes (in seconds):")
 print(runtime_df)
 
-# Construct the filename for the runtime results
-runtime_filename = os.path.join(results_folder, f"runtime_{dataset_name}.csv")
-
-# Save the runtime DataFrame
-runtime_df.to_csv(runtime_filename, index=False)
+save_df(runtime_df, "runtime", dataset_name)
 
 # %%
 # ---------------------------- Supervised Evaluation ------------------------
@@ -229,32 +233,31 @@ supervised_metrics = {
     'NMI': compute_nmi,
 }
 
-# Compute and collect all supervised metrics
-supervised_results = []
-for metric, func in supervised_metrics.items():
-    results = {
-        method: func(df, true_col='y_true', pred_col=method)
-        for method in clustering_methods
+# Compute all metrics in one nested dictionary: {algorithm: {metric: value}}
+supervised_results = {
+    method: {
+        metric: func(df, true_col='y_true', pred_col=method)
+        for metric, func in supervised_metrics.items()
     }
-    metric_df = pd.DataFrame.from_dict(results, orient='index', columns=[metric])
-    supervised_results.append(metric_df)
+    for method in clustering_methods
+}
 
-# Combine all supervised metrics into one DataFrame
-supervised_metrics_df = pd.concat(supervised_results, axis=1)
+# Convert to DataFrame
+supervised_metrics_df = pd.DataFrame.from_dict(supervised_results, orient='index')
 
-# Add dataset name as a column
+# Move algorithm names to a column
+supervised_metrics_df.reset_index(inplace=True)
+supervised_metrics_df.rename(columns={'index': 'Algorithm'}, inplace=True)
+
+# Add dataset name
 supervised_metrics_df['Dataset'] = dataset_name
 
+# Output and save
 print("\nSupervised Clustering Metrics:")
 print(supervised_metrics_df)
 
-# Construct the filename for the runtime results
-supervised_metrics_filename = os.path.join(results_folder, f"supervised_metrics_{dataset_name}.csv")
+save_df(supervised_metrics_df, "supervised_metrics", dataset_name)
 
-# Save the runtime DataFrame
-supervised_metrics_df.to_csv(supervised_metrics_filename, index=False)
-
-# %%
 # ---------------------------- Unsupervised Evaluation ------------------------
 
 unsupervised_metrics = {
@@ -263,35 +266,34 @@ unsupervised_metrics = {
     'Calinski-Harabasz Index': compute_calinski_harabasz_score,
 }
 
-unsupervised_results = []
-for metric_name, func in unsupervised_metrics.items():
-    results = {}
-    for method in clustering_methods:
+# Compute all unsupervised metrics in a nested dictionary: {algorithm: {metric: value}}
+unsupervised_results = {}
+for method in clustering_methods:
+    method_results = {}
+    for metric_name, func in unsupervised_metrics.items():
         try:
             score = func(df, pred_col=method, features=feature_columns)
-            results[method] = score
+            method_results[metric_name] = score
         except Exception as e:
             print(f"Error computing {metric_name} for {method}: {e}")
-            results[method] = None
-    metric_df = pd.DataFrame.from_dict(results, orient='index', columns=[metric_name])
-    unsupervised_results.append(metric_df)
+            method_results[metric_name] = None
+    unsupervised_results[method] = method_results
 
-# Combine and display unsupervised metric results
-unsupervised_metrics_df = pd.concat(unsupervised_results, axis=1)
-# Add dataset name as a column (optional, if you want to include dataset name)
+# Convert to DataFrame
+unsupervised_metrics_df = pd.DataFrame.from_dict(unsupervised_results, orient='index')
+
+# Move algorithm names to a column
+unsupervised_metrics_df.reset_index(inplace=True)
+unsupervised_metrics_df.rename(columns={'index': 'Algorithm'}, inplace=True)
+
+# Add dataset name
 unsupervised_metrics_df['Dataset'] = dataset_name
 
-# Print the unsupervised metrics DataFrame
+# Output and save
 print("\nUnsupervised Clustering Metrics:")
 print(unsupervised_metrics_df)
 
-# Construct the filename for the unsupervised metrics results
-unsupervised_metrics_filename = os.path.join(results_folder, f"unsupervised_metrics_{dataset_name}.csv")
-
-# Save the unsupervised metrics DataFrame
-unsupervised_metrics_df.to_csv(unsupervised_metrics_filename, index=False)
-
-print(f"\nUnsupervised metrics saved to {unsupervised_metrics_filename}")
+save_df(unsupervised_metrics_df, "unsupervised_metrics", dataset_name)
 
 # %%
 # ---------------------------- DEC clustering method ------------------------
@@ -309,5 +311,3 @@ df_dec = run_dec_clustering_from_dataframe(
 )
 
 plot_clusters(df_dec, feature_columns, label_column='cluster', title='DEC clustering', colors=None)
-
-# %%
