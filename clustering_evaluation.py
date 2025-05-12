@@ -72,11 +72,13 @@ dataset_name = "2d_gauss"  # Options: "1d_simple",
 #                              "1d_gauss", 
 #                              "2d_gauss", 
 #                              "Seed_Data_class.csv" 
+
 k = None  # Number of clusters 
 plot_title = None
 random_seed = np.random.randint(0, 10000)
 gauss_feature_numbers = 2
 
+# %% read in dataset
 if dataset_name == "1d_simple":
     k = 3
     df = generate_clustering_1d_data(repeat_const=100, 
@@ -116,7 +118,7 @@ else:
 # Extract feature columns from the DataFrame
 feature_columns = [col for col in df.columns if col not in {'y_true', 'y_live'}]
 
-# Plot dataset and seeds only separately
+# %% Plot dataset and seeds only separately
 plot_clusters(df, feature_columns, label_column='y_true', title=plot_title, show_seeds_only=False)
 plot_clusters(df, feature_columns, label_column='y_live', title=dataset_name + ' (seeds only)', show_seeds_only=True)
 
