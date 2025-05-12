@@ -1,29 +1,52 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import mode
+
 from sklearn.cluster import KMeans, MeanShift, estimate_bandwidth, DBSCAN, AgglomerativeClustering
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import SpectralClustering
-from clustering_nassir.cluster import Nassir_clustering
 from k_means_constrained import KMeansConstrained
 from copkmeans.cop_kmeans import cop_kmeans
 import hdbscan
+from clustering_nassir.cluster import Nassir_clustering
 
 def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true', remap_labels=False):
     """
-    Perform clustering using the specified clustering algorithm and optionally remap labels
+    Perform clustering using the specified clustering algorithm and optionally remap cluster labels 
     to match the most frequent ground-truth label in each cluster.
 
+    This function fits the provided clustering model on the features of the DataFrame and, if specified, 
+    remaps the generated cluster labels to align with the most frequent target label within each cluster 
+    (using the ground-truth labels).
+
     Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - clusterer (sklearn.cluster object): A clustering algorithm with a `fit` method (e.g., KMeans, DBSCAN).
-    - target_column (str): Column name for ground-truth labels.
-    - remap_labels (bool): Whether to remap the cluster labels to match the most frequent ground-truth label in each cluster.
+    - df (pd.DataFrame): The DataFrame containing the features and optionally ground-truth labels.
+    - feature_columns (list of str): List of column names to be used as features for clustering.
+    - clusterer (sklearn.cluster object or similar): A clustering algorithm that has a `fit` method 
+      (e.g., KMeans, DBSCAN, etc.) which will be used to perform clustering.
+    - target_column (str, optional): The column name for the ground-truth labels (default is 'y_true'). 
+      If provided and `remap_labels` is `True`, the function will attempt to remap the cluster labels 
+      to match the most frequent label from the target column within each cluster.
+    - remap_labels (bool, optional): If `True`, cluster labels will be remapped to match the most frequent 
+      ground-truth label in each cluster. Default is `False`.
 
     Returns:
-    - df (pd.DataFrame): DataFrame with predicted cluster labels added as a new column.
-    """
+    - np.ndarray: An array of predicted cluster labels, possibly remapped according to the target column.
+
+    Raises:
+    - ValueError: If `df` is not a DataFrame, if any feature columns are missing from `df`, 
+      or if the `target_column` is not found in `df` when `remap_labels` is `True`.
+      """
+
+    # Validate input
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("Input df must be a pandas DataFrame.")
+    
+    if not all(col in df.columns for col in feature_columns):
+        raise ValueError(f"Some feature columns are missing from the DataFrame: {feature_columns}")
+    
+    if target_column and target_column not in df.columns:
+        raise ValueError(f"Target column '{target_column}' not found in DataFrame.")
 
     features = df[feature_columns].to_numpy()
 
@@ -46,124 +69,38 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
     return labels
 
 def kmeans_clustering(df, feature_columns, target_column='y_true', n_clusters=3, random_state=0, remap_labels=False):
-    """
-    Perform KMeans clustering and add a 'KMeans' column to the DataFrame.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with predicted cluster labels in 'KMeans'.
-    """
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state)
     df['KMeans'] = cluster_with_remapping(df, feature_columns, kmeans, target_column, remap_labels)
+
     return df
 
 def meanshift_clustering(df, feature_columns, target_column='y_true', bandwidth=None, remap_labels=False):
-    """
-    Perform Mean Shift clustering and add a 'MeanShift' column to the DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - target_column (str): Column name for ground-truth labels.
-    - bandwidth (float or None): Bandwidth for MeanShift. If None, it is estimated.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with 'MeanShift' column of predicted labels.
-    """
     bw = bandwidth or estimate_bandwidth(df[feature_columns].to_numpy(), quantile=0.2, n_samples=500)
     ms = MeanShift(bandwidth=bw, bin_seeding=True)
     df['MeanShift'] = cluster_with_remapping(df, feature_columns, ms, target_column, remap_labels)
     return df
 
 def dbscan_clustering(df, feature_columns, target_column='y_true', eps=0.5, min_samples=5, remap_labels=False):
-    """
-    Perform DBSCAN clustering and add a 'DBSCAN' column to the DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - target_column (str): Column name for ground-truth labels.
-    - eps (float): The maximum distance between two samples for them to be considered as in the same neighborhood.
-    - min_samples (int): The number of samples in a neighborhood for a point to be considered as a core point.
-    - remap_labels (bool): Whether to remap the cluster labels to match the most frequent ground-truth label in each cluster.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with 'DBSCAN' column of predicted labels.
-    """
     dbscan = DBSCAN(eps=eps, min_samples=min_samples)
     df['DBSCAN'] = cluster_with_remapping(df, feature_columns, dbscan, target_column, remap_labels)
     return df
 
 def hdbscan_clustering(df, feature_columns, target_column='y_true', min_cluster_size=5, min_samples=None, remap_labels=False):
-    """
-    Perform HDBSCAN clustering and add an 'HDBSCAN' column to the DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - target_column (str): Column name for ground-truth labels.
-    - min_cluster_size (int): Minimum size of clusters.
-    - min_samples (int or None): Minimum samples per cluster (can be None for default).
-    - remap_labels (bool): Whether to remap the cluster labels to match the most frequent ground-truth label in each cluster.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with 'HDBSCAN' column of predicted labels.
-    """
     hdb = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples)
     df['HDBSCAN'] = cluster_with_remapping(df, feature_columns, hdb, target_column, remap_labels)
     return df
 
 def agglomerative_clustering(df, feature_columns, target_column='y_true', n_clusters=3, linkage='ward', remap_labels=False):
-    """
-    Perform Agglomerative Clustering and add an 'Agglomerative' column to the DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - target_column (str): Column name for ground-truth labels.
-    - n_clusters (int): The number of clusters to form.
-    - linkage (str): The linkage criterion to use ('ward', 'complete', 'average', 'single').
-    - remap_labels (bool): Whether to remap the cluster labels to match the most frequent ground-truth label in each cluster.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with 'Agglomerative' column of predicted labels.
-    """
     agglo = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage)
     df['Agglomerative'] = cluster_with_remapping(df, feature_columns, agglo, target_column, remap_labels)
     return df
 
 def gmm_clustering(df, feature_columns, target_column='y_true', n_components=3, remap_labels=False):
-    """
-    Perform Gaussian Mixture Model (GMM) clustering and add a 'GMM' column to the DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - target_column (str): Column name for ground-truth labels.
-    - n_components (int): The number of Gaussian components (clusters) to fit.
-    - remap_labels (bool): Whether to remap the cluster labels to match the most frequent ground-truth label in each cluster.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with 'GMM' column of predicted labels.
-    """
     gmm = GaussianMixture(n_components=n_components, random_state=0)
     df['GMM'] = cluster_with_remapping(df, feature_columns, gmm, target_column, remap_labels)
     return df
 
 def spectral_clustering(df, feature_columns, target_column='y_true', n_clusters=3, affinity='nearest_neighbors', remap_labels=False):
-    """
-    Perform Spectral Clustering and add a 'Spectral' column to the DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - target_column (str): Column name for ground-truth labels.
-    - n_clusters (int): The number of clusters to form.
-    - affinity (str): The method to use to compute the affinity matrix. ('nearest_neighbors', 'rbf', etc.)
-    - remap_labels (bool): Whether to remap the cluster labels to match the most frequent ground-truth label in each cluster.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with 'Spectral' column of predicted labels.
-    """
     spectral = SpectralClustering(n_clusters=n_clusters, affinity=affinity, random_state=0)
     df['Spectral'] = cluster_with_remapping(df, feature_columns, spectral, target_column, remap_labels)
     return df
@@ -171,22 +108,6 @@ def spectral_clustering(df, feature_columns, target_column='y_true', n_clusters=
 def constrained_kmeans_clustering(df, feature_columns, target_column='y_true',
                                   n_clusters=3, size_min=None, size_max=None,
                                   random_state=0, remap_labels=False):
-    """
-    Perform constrained KMeans clustering using cluster_with_remapping and add a 'ConstrainedKMeans' column to the DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - target_column (str): Column name for ground-truth labels.
-    - n_clusters (int): Number of clusters.
-    - size_min (int or None): Minimum cluster size. If None, computed automatically.
-    - size_max (int or None): Maximum cluster size. If None, computed automatically.
-    - random_state (int): Random seed.
-    - remap_labels (bool): Whether to remap cluster labels to dominant true labels.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with predicted labels in 'ConstrainedKMeans'.
-    """
     features = df[feature_columns].to_numpy()
     n_samples = features.shape[0]
 
@@ -211,9 +132,6 @@ def constrained_kmeans_clustering(df, feature_columns, target_column='y_true',
     return df
 
 # -----------------------------------COPK-means-----------------------------------
-
-import numpy as np
-from copkmeans.cop_kmeans import cop_kmeans
 
 def generate_constraints_from_labels(df, label_column='y_live'):
     """
@@ -246,20 +164,7 @@ def generate_constraints_from_labels(df, label_column='y_live'):
     return must_link, cannot_link
 
 def copk_means_clustering(df, feature_columns, target_column='y_true', label_column='y_live', k=5, remap_labels=False):
-    """
-    Perform COPK-means clustering and add a 'COPKMeans' column to the DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - target_column (str): Column name for ground-truth labels.
-    - label_column (str): Column name for available labels to generate constraints.
-    - k (int): The number of clusters.
-    - remap_labels (bool): Whether to remap the cluster labels to match the most frequent ground-truth label in each cluster.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with predicted cluster labels in 'COPKMeans'.
-    """
+    
     # Generate constraints based on the 'y_live' column (excluding -1 labels)
     must_link, cannot_link = generate_constraints_from_labels(df, label_column=label_column)
 
@@ -289,17 +194,6 @@ def seeded_k_means_clustering(df, feature_columns, target_column='y_true', seeds
     """
     Perform KMeans clustering with predefined initial centroids calculated from the 'y_live' column
     and add a 'KMeans' column to the DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame with features and optionally target labels.
-    - feature_columns (list): Feature column names.
-    - target_column (str): Column name for ground-truth labels.
-    - n_clusters (int): Number of clusters to form.
-    - random_state (int): Seed for reproducibility.
-    - remap_labels (bool): Whether to remap the cluster labels to match the most frequent ground-truth label in each cluster.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with predicted cluster labels in 'KMeans'.
     """
 
     # Get seed points (where y_live != -1)
@@ -335,60 +229,3 @@ def novel_clustering(df, feature_columns, seeds='y_live'):
     novel_method = Nassir_clustering()
     df['novel_method'] = novel_method.fit(num_d)
     return df
-
-# Kmeans-- (not implemented as need to do it myself, plus dificult to set parameters)
-# def kmeans_minus_minus_from_pseudocode(X, k, l, max_iter=100, tol=1e-4, random_state=None):
-#     """
-#     Direct implementation of k-means-- from pseudocode.
-
-#     Parameters:
-#     - X: ndarray of shape (n_samples, n_features), input data
-#     - k: int, number of clusters
-#     - l: int, number of outliers to remove each iteration
-#     - max_iter: int, maximum number of iterations
-#     - tol: float, convergence tolerance
-#     - random_state: int or None
-
-#     Returns:
-#     - C: ndarray of shape (k, n_features), final cluster centers
-#     - L: ndarray of shape (l,), indices of outlier points
-#     """
-#     rng = check_random_state(random_state)
-#     n_samples = X.shape[0]
-
-#     # Step 1: Randomly choose k initial centers
-#     C = X[rng.choice(n_samples, k, replace=False)]
-#     prev_C = np.copy(C)
-
-#     for i in range(max_iter):
-#         # Step 4: Compute distances to nearest center
-#         distances = np.min(pairwise_distances(X, C), axis=1)
-
-#         # Step 5: Sort distances in descending order
-#         sorted_indices = np.argsort(-distances)
-
-#         # Step 6: Select top-l as outliers
-#         L = sorted_indices[:l]
-
-#         # Step 7: Remove outliers to get Xi
-#         Xi = np.delete(X, L, axis=0)
-
-#         # Step 8-10: Assign inliers to nearest center and compute new means
-#         labels = np.argmin(pairwise_distances(Xi, C), axis=1)
-#         new_C = np.zeros_like(C)
-#         for j in range(k):
-#             cluster_points = Xi[labels == j]
-#             if len(cluster_points) > 0:
-#                 new_C[j] = cluster_points.mean(axis=0)
-#             else:
-#                 new_C[j] = X[rng.choice(n_samples)]
-
-#         # Step 11: Update centers
-#         C = new_C
-
-#         # Step 12: Check convergence
-#         if np.linalg.norm(C - prev_C) < tol:
-#             break
-#         prev_C = np.copy(C)
-
-#     return C, L
