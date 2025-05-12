@@ -25,9 +25,11 @@ import pandas as pd
 import numpy as np
 
 # Synthetic data generators    
-from data.synthetic.one_dim_data import generate_clustering_1d_data
-from data.synthetic.one_dim_data_gauss import generate_clustering_1d_gauss_anomalies
-from data.synthetic.two_dim_data_gauss import generate_clustering_2d_gauss_data
+from data.synthetic.generate_data import (
+    generate_clustering_1d_data, 
+    generate_clustering_1d_gauss_anomalies, 
+    generate_clustering_2d_gauss_data
+)
 
 # Clustering methods
 from clustering_methods import (
@@ -59,7 +61,7 @@ results_folder = 'results'
 # ---------------------------- Dataset Configuration ------------------------
 
 # Define dataset name, note all features must be numeric
-dataset_name = "Seed_Data_class.csv"  # Options: "1d_simple", 
+dataset_name = "2d_gauss"  # Options: "1d_simple", 
 #                              "1d_gauss", 
 #                              "2d_gauss", 
 #                              "Seed_Data_class.csv" 
@@ -95,8 +97,7 @@ elif dataset_name == "2d_gauss":
                                         rand_seed=random_seed,
                                         same_density=False,
                                         labelled_fraction=0.01,
-                                        add_anomaly_cluster=True,
-                                        plot=True,
+                                        add_anomaly_cluster=True
                                         )
     plot_title = dataset_name + ' (all data)'
 
