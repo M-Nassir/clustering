@@ -3,7 +3,7 @@ Clustering Evaluation Pipeline
 ------------------------------
 
 This script evaluates multiple clustering algorithms (unsupervised, semi-supervised, and deep clustering)
-on various datasets (synthetic 1D/2D, CSV-based) with support for both labelled and partially-labelled data.
+on various datasets (synthetic 1D/2D, CSV-based, Image data) with support for both labelled and partially-labelled data.
 
 Key features:
 - Generates or loads datasets and applies labelling for semi-supervised learning.
@@ -20,20 +20,9 @@ Adaptable for research on clustering algorithm performance and semi-supervised c
 # %%
 # ---------------------------- Imports and setup -----------------
 import os
-# import sys
 import time
 import pandas as pd
 import numpy as np
-
-# # Get the current working directory (where the notebook is running from)
-# current_dir = os.getcwd()
-
-# # Go up 2 levels to reach the 'clustering' project root
-# root_path = os.path.abspath(os.path.join(current_dir, '../../'))
-# if root_path not in sys.path:
-#     sys.path.insert(0, root_path)
-
-# results_folder = os.path.abspath(os.path.join(os.getcwd(), '../../results'))
 
 # Synthetic data generators    
 from data.synthetic.one_dim_data import generate_clustering_1d_data
@@ -48,8 +37,12 @@ from clustering_methods import (
     seeded_k_means_clustering, novel_clustering
 )
 
+# deep learning methods
+from dec_clustering import run_dec_clustering_from_dataframe
+
 # Plotting
 from utilities.plotting import plot_clusters
+from utilities.cluster_utilities import load_and_prepare_dataset 
 
 # Evaluation metrics
 from utilities.evaluation_metrics import (
@@ -59,80 +52,63 @@ from utilities.evaluation_metrics import (
     compute_calinski_harabasz_score
 )
 
-# DEC method
-from dec_clustering import run_dec_clustering_from_dataframe
-
 # Output directory
 results_folder = 'results'
 
 # %%
 # ---------------------------- Dataset Configuration ------------------------
 
-# Define dataset mode
-mode = "from_csv"  # Options: "1d_simple", "1d_gauss", "2d_gauss", "from_csv"
-k = None  # Number of clusters (used by some algorithms like k-means, we supply ground truth number)
+# Define dataset name, note all features must be numeric
+dataset_name = "Seed_Data_class.csv"  # Options: "1d_simple", 
+#                              "1d_gauss", 
+#                              "2d_gauss", 
+#                              "Seed_Data_class.csv" 
+k = None  # Number of clusters 
 plot_title = None
+random_seed = np.random.randint(0, 10000)
+gauss_feature_numbers = 2
 
-if mode == "1d_simple":
+if dataset_name == "1d_simple":
     k = 3
-    df = generate_clustering_1d_data(repeat_const=100, percent_labelled=0.03, random_state=None)
-    plot_title = mode + ' (all data with histogram overlay)'
+    df = generate_clustering_1d_data(repeat_const=100, 
+                                     percent_labelled=0.03, 
+                                     random_state=None)
+    plot_title = dataset_name + ' (all data with histogram overlay)'
 
-elif mode == "1d_gauss":
+elif dataset_name == "1d_gauss":
     k = 3
-    df = generate_clustering_1d_gauss_anomalies(random_seed=42,
+    df = generate_clustering_1d_gauss_anomalies(random_seed=random_seed,
                                                labelled_percent=0.1,
-                                               cluster_params=[(0, 1), (50, 3), (100, 6)],
+                                               cluster_params=[
+                                                   (0, 1), (50, 3), (100, 6)
+                                                   ],
                                                samples_per_cluster=10000,
                                                include_anomaly_cluster=True,
                                                )
-    plot_title = mode + ' (all data with histogram overlay)'
+    plot_title = dataset_name + ' (all data with histogram overlay)'
 
-elif mode == "2d_gauss":
+elif dataset_name == "2d_gauss":
     k=5
     df = generate_clustering_2d_gauss_data(n_samples=10000,
                                         n_components=k,
-                                        num_features=2,
-                                        rand_seed=1,
+                                        num_features=gauss_feature_numbers,
+                                        rand_seed=random_seed,
                                         same_density=False,
                                         labelled_fraction=0.01,
                                         add_anomaly_cluster=True,
                                         plot=True,
                                         )
-    plot_title = mode + ' (all data)'
+    plot_title = dataset_name + ' (all data)'
 
-elif mode == "from_csv":
-    # Read data from a CSV file
-    csv_file_path = "data/Mall_Customers.csv"  # Replace with the actual file path
-    df = pd.read_csv(csv_file_path)
-
-     # Specify the name of the label column ('class' for example)
-    label_column = 'class'  # Replace with the actual label column name
-
-    # Check if the label column exists and rename it to 'y_true' for consistency
-    if label_column not in df.columns:
-        raise ValueError(f"The specified label column '{label_column}' was not found in the dataset.")
-
-    # Rename the label column to 'y_true' to ensure compatibility with the rest of the code
-    df.rename(columns={label_column: 'y_true'}, inplace=True)
-
-    # Set k as the number of unique values in the 'y_true' column (this determines the number of clusters)
-    k = df['y_true'].nunique()
-
-    # Randomly label a portion of the data as labeled seeds
-    percent_labelled = 0.05  # Percentage of data to be labeled
-    n_labelled = int(len(df) * percent_labelled)
-    
-    # Randomly choose `n_labelled` rows to have labels, the rest will remain unlabeled (marked as -1)
-    labelled_indices = np.random.choice(df.index, size=n_labelled, replace=False)
-    df['y_live'] = -1  # Initially mark all as unlabeled
-    df.loc[labelled_indices, 'y_live'] = df.loc[labelled_indices, 'y_true']  # Assign random labels to the seeds
-
+else:
+    df, k = load_and_prepare_dataset(dataset_name, 
+                                     label_column='class', 
+                                     percent_labelled=0.05)
+     
 # Extract feature columns from the DataFrame
 feature_columns = [col for col in df.columns if col not in {'y_true', 'y_live'}]
-dataset_name = mode
 
-# Plot dataset
+# Plot dataset and seeds only separately
 plot_clusters(df, feature_columns, label_column='y_true', title=plot_title, show_seeds_only=False)
 plot_clusters(df, feature_columns, label_column='y_live', title=dataset_name + ' (seeds only)', show_seeds_only=True)
 
@@ -141,15 +117,15 @@ plot_clusters(df, feature_columns, label_column='y_live', title=dataset_name + '
 
 # Flags to enable/disable algorithms
 clustering_flags = {
-    'KMeans': False,
-    'MeanShift': False,
+    'KMeans': True,
+    'MeanShift': True,
     'DBSCAN': True,
     'HDBSCAN': True,
-    'Agglomerative': False,
-    'GMM': False,
+    'Agglomerative': True,
+    'GMM': True,
     'Spectral': False,  # Note: Spectral Clustering may be slow on large datasets
-    'ConstrainedKMeans': False,
-    'COPKMeans': False,
+    'ConstrainedKMeans': True,
+    'COPKMeans': True,
     'SeededKMeans': True,
     'novel_method': True,
 
@@ -196,7 +172,7 @@ clustering_configs = {
         'params': {'n_clusters': k, 'target_column': 'y_true'}
     },
     'COPKMeans': {
-        'function': copk_means_clustering,  # Function for COPKMeans clustering
+        'function': copk_means_clustering,  
         'params': {'k': k, 'target_column': 'y_true', 'label_column': 'y_live', 'remap_labels': True}
     },
     'SeededKMeans': {
@@ -205,7 +181,7 @@ clustering_configs = {
     },
     'novel_method': {
         'function': novel_clustering,
-        'params': {'seeds': 'y_live'}  # Assuming your clustering method uses 'y_live' as seed labels
+        'params': {'seeds': 'y_live'}  
     },
 }
 
@@ -226,7 +202,7 @@ runtime_df = pd.DataFrame([
     for algo, rt in runtimes.items()
 ])
 
-# Print the DataFrame
+# Print the runtime and DataFrame
 print("\nRuntimes (in seconds):")
 print(runtime_df)
 
