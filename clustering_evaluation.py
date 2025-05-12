@@ -142,35 +142,35 @@ runtimes = {}
 clustering_configs = {
     'KMeans': {
         'function': kmeans_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true'}
+        'params': {'n_clusters': k, 'target_column': 'y_true', 'remap_labels': True}
     },
     'MeanShift': {
         'function': meanshift_clustering,
-        'params': {'target_column': 'y_true_'}
+        'params': {'target_column': 'y_true_', 'remap_labels': True}
     },
     'DBSCAN': {
         'function': dbscan_clustering,
-        'params': {'target_column': 'y_true', 'remap_labels': False}
+        'params': {'target_column': 'y_true', 'remap_labels': True}
     },
     'HDBSCAN': {
         'function': hdbscan_clustering,
-        'params': {'target_column': 'y_true', 'min_cluster_size': 5, 'min_samples': None, 'remap_labels': False}
+        'params': {'target_column': 'y_true', 'min_cluster_size': 5, 'min_samples': None, 'remap_labels': True}
     },
     'Agglomerative': {
         'function': agglomerative_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true'}
+        'params': {'n_clusters': k, 'target_column': 'y_true', 'remap_labels': True}
     },
     'GMM': {
         'function': gmm_clustering,
-        'params': {'n_components': k, 'target_column': 'y_true'}
+        'params': {'n_components': k, 'target_column': 'y_true', 'remap_labels': True}
     },
     'Spectral': {
         'function': spectral_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true'}
+        'params': {'n_clusters': k, 'target_column': 'y_true', 'remap_labels': True}
     },
     'ConstrainedKMeans': {
         'function': constrained_kmeans_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true'}
+        'params': {'n_clusters': k, 'target_column': 'y_true', 'remap_labels': True}
     },
     'COPKMeans': {
         'function': copk_means_clustering,  
@@ -178,7 +178,7 @@ clustering_configs = {
     },
     'SeededKMeans': {
         'function': seeded_k_means_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true', 'seeds':'y_live', 'remap_labels': False}       
+        'params': {'n_clusters': k, 'target_column': 'y_true', 'seeds':'y_live', 'remap_labels': True}       
     },
     'novel_method': {
         'function': novel_clustering,
