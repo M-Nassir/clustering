@@ -65,7 +65,7 @@ from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
     agglomerative_clustering, gmm_clustering, spectral_clustering,
     constrained_kmeans_clustering, copk_means_clustering, hdbscan_clustering, 
-    seeded_k_means_clustering, novel_clustering
+    seeded_k_means_clustering, novel_clustering_method
 )
 
 # deep learning methods
@@ -168,18 +168,23 @@ plot_clusters(df, feature_columns, label_column='y_live', title=dataset_name + '
 
 # Flags to enable/disable algorithms
 clustering_flags = {
-    'KMeans': True,
-    'MeanShift': True,
-    'DBSCAN': True,
-    'HDBSCAN': True,
-    'Agglomerative': True,
-    'GMM': True,
+
+    # Unsupervised
+    'KMeans': False,
+    'MeanShift': False,
+    'DBSCAN': False,
+    'HDBSCAN': False,
+    'Agglomerative': False,
+    'GMM': False,
     'Spectral': False,  # Note: Spectral Clustering may be slow on large datasets
-    'ConstrainedKMeans': True,
+
+    # Semi-supervised 
+    'ConstrainedKMeans': False,
     'COPKMeans': True,
     'SeededKMeans': True,
     'novel_method': True,
 
+    # Deep learning unsupervised and semi-supervised
     'DEC': False,
     'S_DEC': False,
     'CDC': False,
@@ -189,7 +194,7 @@ clustering_flags = {
 clustering_configs = {
     'KMeans': {
         'function': kmeans_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true', 'remap_labels': True}
+        'params': {'n_clusters': num_clusters, 'target_column': 'y_true', 'remap_labels': True}
     },
     'MeanShift': {
         'function': meanshift_clustering,
@@ -205,30 +210,31 @@ clustering_configs = {
     },
     'Agglomerative': {
         'function': agglomerative_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true', 'remap_labels': True}
+        'params': {'n_clusters': num_clusters, 'target_column': 'y_true', 'remap_labels': True}
     },
     'GMM': {
         'function': gmm_clustering,
-        'params': {'n_components': k, 'target_column': 'y_true', 'remap_labels': True}
+        'params': {'n_components': num_clusters, 'target_column': 'y_true', 'remap_labels': True}
     },
     'Spectral': {
         'function': spectral_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true', 'remap_labels': True}
+        'params': {'n_clusters': num_clusters, 'target_column': 'y_true', 'remap_labels': True}
     },
     'ConstrainedKMeans': {
         'function': constrained_kmeans_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true', 'remap_labels': True}
+        'params': {'n_clusters': num_clusters, 'target_column': 'y_true', 'size_min': 15, 
+                   'size_max': df.shape[0], 'remap_labels': True}
     },
     'COPKMeans': {
         'function': copk_means_clustering,  
-        'params': {'k': k, 'target_column': 'y_true', 'label_column': 'y_live', 'remap_labels': True}
+        'params': {'num_clusters': num_clusters, 'target_column': 'y_true', 'label_column': 'y_live', 'remap_labels': True}
     },
     'SeededKMeans': {
         'function': seeded_k_means_clustering,
-        'params': {'n_clusters': k, 'target_column': 'y_true', 'seeds':'y_live', 'remap_labels': True}       
+        'params': {'n_clusters': num_clusters, 'target_column': 'y_true', 'seeds':'y_live', 'remap_labels': True}       
     },
     'novel_method': {
-        'function': novel_clustering,
+        'function': novel_clustering_method,
         'params': {'seeds': 'y_live'}  
     },
 }
@@ -246,7 +252,8 @@ def apply_clustering_algorithms(df, configs, flags, features, plot=True):
             runtimes[name] = time.time() - start
     return df, runtimes
 
-df, runtimes = apply_clustering_algorithms(df, clustering_configs, clustering_flags, feature_columns, plot=True)
+df, runtimes = apply_clustering_algorithms(df, clustering_configs, clustering_flags, 
+                                           feature_columns, plot=True)
 
 # Convert runtimes dict to DataFrame with dataset name
 runtime_df = pd.DataFrame([
@@ -344,7 +351,7 @@ save_df(unsupervised_metrics_df, "unsupervised_metrics", dataset_name)
 df_dec = run_dec_clustering_from_dataframe(
     df.copy(),
     target_column='y_true',
-    n_clusters=k,
+    n_clusters=num_clusters,
     pretrain_epochs=100,
     train_epochs=100,
     batch_size=256,
