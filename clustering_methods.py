@@ -135,33 +135,21 @@ def constrained_kmeans_clustering(df, feature_columns, target_column='y_true',
 
 # -----------------------------------COPK-means-----------------------------------
 
+from itertools import combinations, product
+
 def generate_constraints_from_labels(df, label_column='y_live'):
-    """
-    Generate must-link and cannot-link constraints based on the 'y_live' column,
-    using all the labels available that are not -1.
-    
-    Parameters:
-    - df (pd.DataFrame): The DataFrame containing the features and labels.
-    - label_column (str): The name of the column containing the available labels.
-    
-    Returns:
-    - must_link (list of tuples): List of must-link pairs (indices).
-    - cannot_link (list of tuples): List of cannot-link pairs (indices).
-    """
-    # Get indices of rows with valid labels (not -1)
-    valid_indices = df[df[label_column] != -1].index
-    
     must_link = []
     cannot_link = []
     
-    # Generate must-link and cannot-link constraints
-    for i in valid_indices:
-        for j in valid_indices:
-            if i != j:
-                if df[label_column].iloc[i] == df[label_column].iloc[j]:
-                    must_link.append((i, j))  # Same label, must-link constraint
-                else:
-                    cannot_link.append((i, j))  # Different labels, cannot-link constraint
+    grouped = df[df[label_column] != -1].groupby(label_column)
+
+    for _, group in grouped:
+        must_link.extend(combinations(group.index, 2))
+
+    labels = list(grouped.groups.keys())
+    for i, l1 in enumerate(labels):
+        for l2 in labels[i+1:]:
+            cannot_link.extend(product(grouped.groups[l1], grouped.groups[l2]))
 
     return must_link, cannot_link
 
