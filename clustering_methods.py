@@ -1,14 +1,13 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import mode
-
 from sklearn.cluster import KMeans, MeanShift, estimate_bandwidth, DBSCAN, AgglomerativeClustering
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import SpectralClustering
 from k_means_constrained import KMeansConstrained
 from copkmeans.cop_kmeans import cop_kmeans
 import hdbscan
-from clustering_nassir.cluster import Nassir_clustering
+from clustering_nassir.cluster import novel_clustering
 
 def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true', remap_labels=False):
     """
@@ -68,10 +67,10 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
 
     return labels
 
-def kmeans_clustering(df, feature_columns, target_column='y_true', n_clusters=3, random_state=0, remap_labels=False):
+def kmeans_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
+                      random_state=0, remap_labels=False):
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state)
     df['KMeans'] = cluster_with_remapping(df, feature_columns, kmeans, target_column, remap_labels)
-
     return df
 
 def meanshift_clustering(df, feature_columns, target_column='y_true', bandwidth=None, remap_labels=False):
@@ -80,17 +79,20 @@ def meanshift_clustering(df, feature_columns, target_column='y_true', bandwidth=
     df['MeanShift'] = cluster_with_remapping(df, feature_columns, ms, target_column, remap_labels)
     return df
 
-def dbscan_clustering(df, feature_columns, target_column='y_true', eps=0.5, min_samples=5, remap_labels=False):
+def dbscan_clustering(df, feature_columns, target_column='y_true', eps=0.5, min_samples=5, 
+                      remap_labels=False):
     dbscan = DBSCAN(eps=eps, min_samples=min_samples)
     df['DBSCAN'] = cluster_with_remapping(df, feature_columns, dbscan, target_column, remap_labels)
     return df
 
-def hdbscan_clustering(df, feature_columns, target_column='y_true', min_cluster_size=5, min_samples=None, remap_labels=False):
+def hdbscan_clustering(df, feature_columns, target_column='y_true', min_cluster_size=5, 
+                       min_samples=None, remap_labels=False):
     hdb = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples)
     df['HDBSCAN'] = cluster_with_remapping(df, feature_columns, hdb, target_column, remap_labels)
     return df
 
-def agglomerative_clustering(df, feature_columns, target_column='y_true', n_clusters=3, linkage='ward', remap_labels=False):
+def agglomerative_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
+                             linkage='ward', remap_labels=False):
     agglo = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage)
     df['Agglomerative'] = cluster_with_remapping(df, feature_columns, agglo, target_column, remap_labels)
     return df
@@ -163,13 +165,14 @@ def generate_constraints_from_labels(df, label_column='y_live'):
 
     return must_link, cannot_link
 
-def copk_means_clustering(df, feature_columns, target_column='y_true', label_column='y_live', k=5, remap_labels=False):
+def copk_means_clustering(df, feature_columns, target_column='y_true', label_column='y_live', 
+                          num_clusters=5, remap_labels=False):
     
     # Generate constraints based on the 'y_live' column (excluding -1 labels)
     must_link, cannot_link = generate_constraints_from_labels(df, label_column=label_column)
 
     # Perform COPK-means clustering
-    clusters, centers = cop_kmeans(dataset=df[feature_columns].to_numpy(), k=k, ml=must_link, cl=cannot_link)
+    clusters, centers = cop_kmeans(dataset=df[feature_columns].to_numpy(), k=num_clusters, ml=must_link, cl=cannot_link)
     
     # If remapping is required, remap the clusters to match the most frequent ground-truth label
     if remap_labels and target_column in df.columns:
@@ -193,39 +196,45 @@ def copk_means_clustering(df, feature_columns, target_column='y_true', label_col
 def seeded_k_means_clustering(df, feature_columns, target_column='y_true', seeds='y_live', n_clusters=3, random_state=0, remap_labels=False):
     """
     Perform KMeans clustering with predefined initial centroids calculated from the 'y_live' column
-    and add a 'KMeans' column to the DataFrame.
+    and add a 'SeededKMeans' column to the DataFrame.
     """
-
     # Get seed points (where y_live != -1)
     seed_data = df[df[seeds] != -1]
 
-    # Calculate initial centroids from seed points
-    if len(seed_data) > 0:
-        initial_centroids = seed_data.groupby(seeds)[feature_columns].mean().to_numpy()
+    if not seed_data.empty:
+        grouped = seed_data.groupby(seeds)[feature_columns].mean()
+        initial_centroids = grouped.to_numpy()
+
+        if len(initial_centroids) != n_clusters:
+            print(f"Warning: Found {len(initial_centroids)} seed centroids, but n_clusters={n_clusters}. Falling back to default init.")
+            initial_centroids = 'k-means++'
+            n_init = 10
+        else:
+            n_init = 1
     else:
-        initial_centroids = None  # No seed data, so we use default KMeans initialization
+        initial_centroids = 'k-means++'
+        n_init = 10
 
     # Perform KMeans with the calculated initial centroids
-    kmeans = KMeans(n_clusters=n_clusters, init=initial_centroids, n_init=1, random_state=random_state)
-
+    kmeans = KMeans(n_clusters=n_clusters, init=initial_centroids, n_init=n_init, random_state=random_state)
     df['SeededKMeans'] = cluster_with_remapping(df, feature_columns, kmeans, target_column, remap_labels)
     return df
 
 # %%
 # ---------------------------- Novel clustering method ------------------------
 
-def novel_clustering(df, feature_columns, seeds='y_live'):
+def novel_clustering_method(df, feature_columns, seeds='y_live'):
     """
-    Perform clustering using Nassir_clustering and add a 'Nassir' column to the DataFrame.
+    Perform clustering using novel clustering method and add a column to the DataFrame.
 
     Returns:
-    - df (pd.DataFrame): DataFrame with predicted cluster labels in 'Nassir'.
+    - df (pd.DataFrame): DataFrame with predicted cluster labels.
     """
 
     # Select feature columns and 'y_live' for clustering input
     num_d = df[feature_columns + [seeds]].to_numpy()
 
     # Instantiate and cluster
-    novel_method = Nassir_clustering()
+    novel_method = novel_clustering()
     df['novel_method'] = novel_method.fit(num_d)
     return df
