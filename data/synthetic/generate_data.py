@@ -1,8 +1,6 @@
 # %% imports
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 
 # %% -----------------------------------------------------------------------
@@ -21,8 +19,6 @@ def generate_clustering_1d_data(repeat_const=100, percent_labelled=0.03, random_
     Returns:
     - df (pd.DataFrame): DataFrame containing 'X', 'y_true', and 'y_live'.
     """
-    if random_state is not None:
-        np.random.seed(random_state)
 
     # Define base cluster data (labelled)
     data_main = np.array([
@@ -154,11 +150,11 @@ def generate_clustering_1d_data(repeat_const=100, percent_labelled=0.03, random_
 #                         Generate 1D Gaussian Clusters with Anomalies
 # --------------------------------------------------------------------------
 
-def generate_clustering_1d_gauss_anomalies(random_seed=42,
-                                               labelled_percent=0.5,
-                                               cluster_params=[(0, 1), (50, 3), (100, 6)],
-                                               samples_per_cluster=10000,
-                                               include_anomaly_cluster=True):
+def generate_clustering_1d_gauss_anomalies(random_seed=None,
+                                            labelled_percent=0.5,
+                                            cluster_params=None,
+                                            samples_per_cluster=10000,
+                                            include_anomaly_cluster=True):
     """
     Generate 1D synthetic data using Gaussian blobs and inject anomalies.
 
@@ -172,8 +168,6 @@ def generate_clustering_1d_gauss_anomalies(random_seed=42,
     Returns:
     - df (DataFrame): Data with 'X', 'y_true', 'y_live' columns.
     """
-
-    np.random.seed(random_seed)
 
     # Generate Gaussian clusters
     data_holder = []
@@ -247,10 +241,11 @@ def generate_clustering_2d_gauss_data(
         n_samples=10000,
         n_components=5,
         num_features=2,
-        rand_seed=0,
+        rand_seed=None,
         same_density=False,
         labelled_fraction=0.01,
         add_anomaly_cluster=True,
+        std_dev=None,
     ):
     """
     Generate 2D synthetic dataset using Gaussian blobs with optional anomaly injection.
@@ -267,15 +262,6 @@ def generate_clustering_2d_gauss_data(
     Returns:
     - df (pd.DataFrame): DataFrame with 'f0', ..., 'fN', 'y_true', and 'y_live'.
     """
-
-    np.random.seed(rand_seed)
-
-    # Define cluster standard deviations
-    if same_density:
-        std_dev = 0.6
-    else:
-        # Set different std deviations for each component
-        std_dev = [1.5, 0.8, 1.2, 3, 0.4][:n_components]
 
     # Generate the main clusters
     X, y_true = make_blobs(
