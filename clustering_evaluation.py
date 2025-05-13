@@ -1,21 +1,50 @@
 """
 Clustering Evaluation Pipeline
 ------------------------------
+Author: Nassir Mohammad  
+Date: 13 May 2025
 
-This script evaluates multiple clustering algorithms (unsupervised, semi-supervised, and deep clustering)
-on various datasets (synthetic 1D/2D, CSV-based, Image data) with support for both labelled and partially-labelled data.
+Description:
+This script provides a comprehensive pipeline for evaluating clustering algorithms across a range of datasets 
+and scenarios, including unsupervised, semi-supervised, and deep clustering approaches. It supports both fully-labelled 
+and partially-labelled data, and is designed to benchmark clustering performance for research purposes.
 
-Key features:
-- Generates or loads datasets and applies labelling for semi-supervised learning.
-- Runs selected clustering methods (e.g., KMeans, DBSCAN, HDBSCAN, Seeded KMeans, custom methods, DEC).
-- Computes runtime and clustering quality metrics:
-    - Supervised: ARI, NMI, Homogeneity, Purity, Completeness, V-measure
-    - Unsupervised: Silhouette Score, Davies-Bouldin, Calinski-Harabasz
-- Plots clustering results with true and predicted labels.
-- Saves results (metrics and runtimes) as CSVs in the results/ folder.
+The pipeline is intended to compare existing methods against a novel clustering algorithm introduced in the research paper:
+"A Computational Theory and Semi-Supervised Algorithm for Clustering" by Nassir Mohammad.
 
-Adaptable for research on clustering algorithm performance and semi-supervised clustering evaluation.
+Key Features:
+-------------
+- Supports various data sources:
+    - Synthetic 1D/2D data
+    - CSV-based tabular data
+    - Image datasets
+- Enables semi-supervised evaluation by randomly selecting a subset of labelled points.
+- Executes multiple clustering algorithms, including:
+    - KMeans, DBSCAN, HDBSCAN
+    - Seeded KMeans (semi-supervised)
+    - Deep Embedded Clustering (DEC)
+- Computes both supervised and unsupervised evaluation metrics:
+    Supervised:
+        - Adjusted Rand Index (ARI)
+        - Normalized Mutual Information (NMI)
+        - Homogeneity
+        - Purity
+        - Completeness
+        - V-measure
+    Unsupervised:
+        - Silhouette Score
+        - Davies-Bouldin Index
+        - Calinski-Harabasz Index
+- Plots clustering results showing true vs predicted labels for visual inspection.
+- Saves evaluation metrics and runtime statistics to the `results/` directory in CSV format.
+
+Intended Use:
+-------------
+This pipeline is designed for research and analysis of clustering algorithm performance, especially in 
+semi-supervised settings where partial label information is available. It is flexible, modular, and suitable 
+for experimentation with new clustering methods.
 """
+
 
 # %%
 # ---------------------------- Imports and setup -----------------
@@ -68,26 +97,26 @@ def save_df(df, filename_prefix, dataset_name):
 # ---------------------------- Dataset Configuration ------------------------
 
 # Define dataset name, note all features must be numeric
-dataset_name = "2d_gauss"  # Options: "1d_simple", 
+dataset_name = "1d_gauss"  # Options: "1d_simple", 
 #                              "1d_gauss", 
 #                              "2d_gauss", 
 #                              "Seed_Data_class.csv" 
 
-k = None  # Number of clusters 
+num_clusters = None  
 plot_title = None
 random_seed = np.random.randint(0, 10000)
-gauss_feature_numbers = 2
+gauss_feature_numbers = 2 
 
 # %% read in dataset
 if dataset_name == "1d_simple":
-    k = 3
+    num_clusters = 3
     df = generate_clustering_1d_data(repeat_const=100, 
                                      percent_labelled=0.03, 
-                                     random_state=None)
+                                     random_state=random_seed)
     plot_title = dataset_name + ' (all data with histogram overlay)'
 
 elif dataset_name == "1d_gauss":
-    k = 3
+    num_clusters = 3
     df = generate_clustering_1d_gauss_anomalies(random_seed=random_seed,
                                                labelled_percent=0.1,
                                                cluster_params=[
@@ -98,22 +127,34 @@ elif dataset_name == "1d_gauss":
                                                )
     plot_title = dataset_name + ' (all data with histogram overlay)'
 
+# TODO: improve the 2d generation of clusters function, e.g. pass std_dev
 elif dataset_name == "2d_gauss":
-    k=5
+    num_clusters=5
+    
+    # Define cluster standard deviations
+    same_density = False
+    if same_density:
+        std_dev = 0.6
+    else:
+        # Set different std deviations for each component
+        std_dev = [1.5, 0.8, 1.2, 3, 0.4][:num_clusters]
+        
     df = generate_clustering_2d_gauss_data(n_samples=10000,
-                                        n_components=k,
+                                        n_components=num_clusters,
                                         num_features=gauss_feature_numbers,
                                         rand_seed=random_seed,
                                         same_density=False,
                                         labelled_fraction=0.01,
-                                        add_anomaly_cluster=True
+                                        add_anomaly_cluster=True,
+                                        std_dev=std_dev,
                                         )
     plot_title = dataset_name + ' (all data)'
 
 else:
-    df, k = load_and_prepare_dataset(dataset_name, 
-                                     label_column='class', 
-                                     percent_labelled=0.05)
+    df, num_clusters = load_and_prepare_dataset(dataset_name, 
+                                                label_column='class', 
+                                                percent_labelled=0.05
+                                                )
      
 # Extract feature columns from the DataFrame
 feature_columns = [col for col in df.columns if col not in {'y_true', 'y_live'}]
