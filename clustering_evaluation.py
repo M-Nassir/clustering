@@ -79,8 +79,9 @@ from utilities.cluster_utilities import load_and_prepare_dataset
 from utilities.evaluation_metrics import (
     compute_purity, compute_homogeneity, compute_ari,
     compute_completeness, compute_v_measure, compute_nmi,
-    compute_silhouette_score, compute_davies_bouldin_score,
-    compute_calinski_harabasz_score
+    compute_fmi,
+    compute_silhouette, compute_davies_bouldin,
+    compute_calinski_harabasz
 )
 
 # Output directory
@@ -97,7 +98,7 @@ def save_df(df, filename_prefix, dataset_name):
 # ---------------------------- Dataset Configuration ------------------------
 
 # Define dataset name, note all features must be numeric
-dataset_name = "1d_gauss"  # Options: "1d_simple", 
+dataset_name = "2d_gauss"  # Options: "1d_simple", 
 #                              "1d_gauss", 
 #                              "2d_gauss", 
 #                              "Seed_Data_class.csv" 
@@ -170,16 +171,16 @@ plot_clusters(df, feature_columns, label_column='y_live', title=dataset_name + '
 clustering_flags = {
 
     # Unsupervised
-    'KMeans': False,
-    'MeanShift': False,
-    'DBSCAN': False,
-    'HDBSCAN': False,
-    'Agglomerative': False,
-    'GMM': False,
+    'KMeans': True,
+    'MeanShift': True,
+    'DBSCAN': True,
+    'HDBSCAN': True,
+    'Agglomerative': True,
+    'GMM': True,
     'Spectral': False,  # Note: Spectral Clustering may be slow on large datasets
 
     # Semi-supervised 
-    'ConstrainedKMeans': False,
+    'ConstrainedKMeans': True,
     'COPKMeans': True,
     'SeededKMeans': True,
     'novel_method': True,
@@ -275,12 +276,13 @@ clustering_methods = [name for name, enabled in clustering_flags.items() if enab
 
 # Define clustering quality metrics requiring ground truth
 supervised_metrics = {
-    'Homogeneity': compute_homogeneity,
-    'ARI': compute_ari,
     'Purity': compute_purity,
+    'Homogeneity': compute_homogeneity,
     'Completeness': compute_completeness,
     'V-Measure': compute_v_measure,
     'NMI': compute_nmi,
+    'ARI': compute_ari,
+    'FMI': compute_fmi,
 }
 
 # Compute all metrics in one nested dictionary: {algorithm: {metric: value}}
@@ -308,12 +310,12 @@ print(supervised_metrics_df)
 
 save_df(supervised_metrics_df, "supervised_metrics", dataset_name)
 
-# ---------------------------- Unsupervised Evaluation ------------------------
+# %% ---------------------------- Unsupervised Evaluation ------------------------
 
 unsupervised_metrics = {
-    'Silhouette Score': compute_silhouette_score,
-    'Davies-Bouldin Index': compute_davies_bouldin_score,
-    'Calinski-Harabasz Index': compute_calinski_harabasz_score,
+    'Silhouette Score': compute_silhouette,
+    'Davies-Bouldin Index': compute_davies_bouldin,
+    'Calinski-Harabasz Index': compute_calinski_harabasz,
 }
 
 # Compute all unsupervised metrics in a nested dictionary: {algorithm: {metric: value}}
