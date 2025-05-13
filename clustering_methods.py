@@ -7,7 +7,7 @@ from sklearn.cluster import SpectralClustering
 from k_means_constrained import KMeansConstrained
 from copkmeans.cop_kmeans import cop_kmeans
 import hdbscan
-from clustering_nassir.cluster import novel_clustering
+from clustering_nassir.cluster import NovelClustering
 
 def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true', remap_labels=False):
     """
@@ -61,7 +61,7 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
                 continue
             mask = (cluster_labels == i)
             if np.any(mask):
-                labels[mask] = mode(df.loc[mask, target_column])[0]
+                labels[mask] = mode(df.loc[mask, target_column], keepdims=True).mode[0]
     else:
         labels = cluster_labels
 
@@ -223,7 +223,7 @@ def seeded_k_means_clustering(df, feature_columns, target_column='y_true', seeds
 # %%
 # ---------------------------- Novel clustering method ------------------------
 
-def novel_clustering_method(df, feature_columns, seeds='y_live'):
+def novel_clustering(df, feature_columns, seeds='y_live'):
     """
     Perform clustering using novel clustering method and add a column to the DataFrame.
 
@@ -235,6 +235,6 @@ def novel_clustering_method(df, feature_columns, seeds='y_live'):
     num_d = df[feature_columns + [seeds]].to_numpy()
 
     # Instantiate and cluster
-    novel_method = novel_clustering()
+    novel_method = NovelClustering()
     df['novel_method'] = novel_method.fit(num_d)
     return df

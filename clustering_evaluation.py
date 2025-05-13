@@ -65,7 +65,7 @@ from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
     agglomerative_clustering, gmm_clustering, spectral_clustering,
     constrained_kmeans_clustering, copk_means_clustering, hdbscan_clustering, 
-    seeded_k_means_clustering, novel_clustering_method
+    seeded_k_means_clustering, novel_clustering
 )
 
 # deep learning methods
@@ -234,7 +234,7 @@ clustering_configs = {
         'params': {'n_clusters': num_clusters, 'target_column': 'y_true', 'seeds':'y_live', 'remap_labels': True}       
     },
     'novel_method': {
-        'function': novel_clustering_method,
+        'function': novel_clustering,
         'params': {'seeds': 'y_live'}  
     },
 }
