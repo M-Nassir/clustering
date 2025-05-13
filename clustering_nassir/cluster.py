@@ -8,7 +8,7 @@ from perception_nassir import Perception
 # without much improvement?
 
 
-class Nassir_clustering:
+class novel_clustering:
     """Clustering algorithm.
 
     Semi-supervised clustering algorithm that uses Nassir's anomaly detection 
