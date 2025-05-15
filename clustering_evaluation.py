@@ -65,7 +65,7 @@ from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
     agglomerative_clustering, gmm_clustering, spectral_clustering,
     constrained_kmeans_clustering, copk_means_clustering, hdbscan_clustering, 
-    seeded_k_means_clustering, novel_clustering
+    seeded_k_means_clustering, novel_clustering, dec_clustering
 )
 
 # deep learning methods
@@ -185,7 +185,7 @@ clustering_flags = {
     'novel_method': True,
 
     # Deep learning unsupervised and semi-supervised
-    'DEC': False,
+    'DEC': True,
     'S_DEC': False,
     'CDC': False,
 }
@@ -236,6 +236,12 @@ clustering_configs = {
     'novel_method': {
         'function': novel_clustering,
         'params': {'seeds': 'y_live'}  
+    },
+    'DEC': {
+        'function': dec_clustering,
+        'params': {'num_clusters': num_clusters, 'pretrain_epochs':10, 'clustering_epochs':10,
+                   'target_column': 'y_true', 'remap_labels': True,}  
+        # defaults 100, 150
     },
 }
 
@@ -350,16 +356,17 @@ save_df(unsupervised_metrics_df, "unsupervised_metrics", dataset_name)
 # %%
 # ---------------------------- DEC clustering method ------------------------
 
-df_dec = run_dec_clustering_from_dataframe(
-    df.copy(),
-    target_column='y_true',
-    n_clusters=num_clusters,
-    pretrain_epochs=100,
-    train_epochs=100,
-    batch_size=256,
-    lr=1e-3,
-    weight_decay=1e-5,
-    save_dir='saves'
-)
+# df_dec = run_dec_clustering_from_dataframe(
+#     df.copy(),
+#     target_column='y_true',
+#     n_clusters=num_clusters,
+#     pretrain_epochs=100,
+#     train_epochs=100,
+#     batch_size=256,
+#     lr=1e-3,
+#     weight_decay=1e-5,
+#     save_dir='saves'
+# )
 
-plot_clusters(df_dec, feature_columns, label_column='cluster', title='DEC clustering', colors=None)
+# plot_clusters(df_dec, feature_columns, label_column='cluster', title='DEC clustering', colors=None)
+
