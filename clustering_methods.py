@@ -10,6 +10,8 @@ import hdbscan
 from clustering_nassir.cluster import NovelClustering
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
+from clustpy.deep import DEC
+
 
 def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
 
@@ -222,4 +224,12 @@ def novel_clustering(df, feature_columns, seeds='y_live'):
     # Instantiate and cluster
     novel_method = NovelClustering()
     df['novel_method'] = novel_method.fit(num_d)
+    return df
+
+def dec_clustering(df, feature_columns, num_clusters=3, 
+                   pretrain_epochs=10, clustering_epochs=10, remap_labels=True):
+    dec = DEC(n_clusters=num_clusters, pretrain_epochs=pretrain_epochs, clustering_epochs=clustering_epochs)
+    dec.fit(df[feature_columns].to_numpy())
+
+    df['DEC'] = dec.labels_
     return df
