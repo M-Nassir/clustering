@@ -227,9 +227,16 @@ def novel_clustering(df, feature_columns, seeds='y_live'):
     return df
 
 def dec_clustering(df, feature_columns, num_clusters=3, 
-                   pretrain_epochs=10, clustering_epochs=10, remap_labels=True):
+                   pretrain_epochs=10, clustering_epochs=10, 
+                   target_column='y_true', remap_labels=True):
     dec = DEC(n_clusters=num_clusters, pretrain_epochs=pretrain_epochs, clustering_epochs=clustering_epochs)
     dec.fit(df[feature_columns].to_numpy())
 
-    df['DEC'] = dec.labels_
+    # If remapping is required, remap the clusters to match the most frequent ground-truth label
+    if remap_labels and target_column in df.columns:
+        remapped_labels = remap_clusters_hungarian_with_noise(dec.labels_, df[target_column].to_numpy())
+        df['DEC'] = remapped_labels
+    else:
+        df['DEC'] = dec.labels_
+        
     return df
