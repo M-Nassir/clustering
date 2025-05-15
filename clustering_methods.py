@@ -26,12 +26,6 @@ def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
 
     return remapped
 
-def remap_clusters_hungarian(y_pred, y_true):
-    cm = confusion_matrix(y_true, y_pred)
-    row_ind, col_ind = linear_sum_assignment(-cm)
-    label_map = {col: row for row, col in zip(row_ind, col_ind)}
-    return np.vectorize(lambda x: label_map.get(x, x))(y_pred)
-
 def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true', remap_labels=False):
     """
     Perform clustering using the specified clustering algorithm and optionally remap cluster labels 
