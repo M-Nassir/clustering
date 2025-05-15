@@ -77,7 +77,7 @@ from utilities.cluster_utilities import load_and_prepare_dataset
 
 # Evaluation metrics
 from utilities.evaluation_metrics import (
-    compute_purity, compute_homogeneity, compute_ari,
+    compute_accuracy, compute_purity, compute_homogeneity, compute_ari,
     compute_completeness, compute_v_measure, compute_nmi,
     compute_fmi,
     compute_silhouette, compute_davies_bouldin,
@@ -105,7 +105,7 @@ dataset_name = "2d_gauss"  # Options: "1d_simple",
 
 num_clusters = None  
 plot_title = None
-random_seed = np.random.randint(0, 10000)
+random_seed = 365 #np.random.randint(0, 10000)
 gauss_feature_numbers = 2 
 
 # %% read in dataset
@@ -128,7 +128,6 @@ elif dataset_name == "1d_gauss":
                                                )
     plot_title = dataset_name + ' (all data with histogram overlay)'
 
-# TODO: improve the 2d generation of clusters function, e.g. pass std_dev
 elif dataset_name == "2d_gauss":
     num_clusters=5
     
@@ -276,6 +275,7 @@ clustering_methods = [name for name, enabled in clustering_flags.items() if enab
 
 # Define clustering quality metrics requiring ground truth
 supervised_metrics = {
+    'Accuracy': compute_accuracy,
     'Purity': compute_purity,
     'Homogeneity': compute_homogeneity,
     'Completeness': compute_completeness,

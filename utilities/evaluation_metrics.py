@@ -5,10 +5,16 @@ import pandas as pd
 from sklearn.metrics import (adjusted_rand_score, completeness_score, v_measure_score,
                              normalized_mutual_info_score, silhouette_score,
                              davies_bouldin_score, calinski_harabasz_score,
-                            fowlkes_mallows_score
+                            fowlkes_mallows_score, accuracy_score,
                              )
 
 # ---------------------------- Supervised metrics -----------------------------------
+def compute_accuracy(df, true_col, pred_col):
+    y_true = np.asarray(df[true_col])
+    y_pred = np.asarray(df[pred_col])
+
+    return accuracy_score(y_true, y_pred)
+
 def compute_purity(df, true_col, pred_col):
     valid_df = df[(df[true_col] != -1) & (df[pred_col] != -1)]
     total = len(valid_df)

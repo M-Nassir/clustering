@@ -11,17 +11,22 @@ from clustering_nassir.cluster import NovelClustering
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 
+def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
+    mask = (y_true != noise_label) & (y_pred != noise_label)
+    y_true_masked = y_true[mask]
+    y_pred_masked = y_pred[mask]
+    cm = confusion_matrix(y_true_masked, y_pred_masked)
+    row_ind, col_ind = linear_sum_assignment(-cm)
+    label_map = {col: row for row, col in zip(row_ind, col_ind)}
+
+    remapped = np.full_like(y_pred, fill_value=noise_label)
+    for i, label in enumerate(y_pred):
+        if label != noise_label:
+            remapped[i] = label_map.get(label, noise_label)
+
+    return remapped
+
 def remap_clusters_hungarian(y_pred, y_true):
-    """
-    Remap predicted cluster labels to match ground-truth labels using the Hungarian algorithm.
-
-    Parameters:
-    - y_pred (np.ndarray): Predicted cluster labels.
-    - y_true (np.ndarray): Ground-truth labels.
-
-    Returns:
-    - np.ndarray: Remapped cluster labels.
-    """
     cm = confusion_matrix(y_true, y_pred)
     row_ind, col_ind = linear_sum_assignment(-cm)
     label_map = {col: row for row, col in zip(row_ind, col_ind)}
@@ -64,7 +69,8 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
 
     # --- Remap labels using Hungarian method if requested ---
     if remap_labels and target_column in df.columns:
-        labels = remap_clusters_hungarian(cluster_labels, df[target_column].to_numpy())
+        labels = remap_clusters_hungarian_with_noise(cluster_labels, df[target_column].to_numpy())
+        print(f"Remapped labels: {labels}")
     else:
         labels = cluster_labels
 
