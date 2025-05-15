@@ -12,6 +12,10 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 
 def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
+
+    y_pred = np.asarray(y_pred)
+    y_true = np.asarray(y_true)
+    
     mask = (y_true != noise_label) & (y_pred != noise_label)
     y_true_masked = y_true[mask]
     y_pred_masked = y_pred[mask]
@@ -167,7 +171,7 @@ def copk_means_clustering(df, feature_columns, target_column='y_true', label_col
     
     # If remapping is required, remap the clusters to match the most frequent ground-truth label
     if remap_labels and target_column in df.columns:
-        remapped_labels = remap_clusters_hungarian(clusters, df[target_column].to_numpy())
+        remapped_labels = remap_clusters_hungarian_with_noise(clusters, df[target_column].to_numpy())
         df['COPKMeans'] = remapped_labels
     else:
         df['COPKMeans'] = clusters
