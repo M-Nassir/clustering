@@ -8,60 +8,63 @@ from k_means_constrained import KMeansConstrained
 from copkmeans.cop_kmeans import cop_kmeans
 import hdbscan
 from clustering_nassir.cluster import NovelClustering
+from scipy.optimize import linear_sum_assignment
+from sklearn.metrics import confusion_matrix
+
+def remap_clusters_hungarian(y_pred, y_true):
+    """
+    Remap predicted cluster labels to match ground-truth labels using the Hungarian algorithm.
+
+    Parameters:
+    - y_pred (np.ndarray): Predicted cluster labels.
+    - y_true (np.ndarray): Ground-truth labels.
+
+    Returns:
+    - np.ndarray: Remapped cluster labels.
+    """
+    cm = confusion_matrix(y_true, y_pred)
+    row_ind, col_ind = linear_sum_assignment(-cm)
+    label_map = {col: row for row, col in zip(row_ind, col_ind)}
+    return np.vectorize(lambda x: label_map.get(x, x))(y_pred)
 
 def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true', remap_labels=False):
     """
     Perform clustering using the specified clustering algorithm and optionally remap cluster labels 
-    to match the most frequent ground-truth label in each cluster.
-
-    This function fits the provided clustering model on the features of the DataFrame and, if specified, 
-    remaps the generated cluster labels to align with the most frequent target label within each cluster 
-    (using the ground-truth labels).
+    using the Hungarian algorithm to best match ground-truth labels.
 
     Parameters:
     - df (pd.DataFrame): The DataFrame containing the features and optionally ground-truth labels.
     - feature_columns (list of str): List of column names to be used as features for clustering.
-    - clusterer (sklearn.cluster object or similar): A clustering algorithm that has a `fit` method 
-      (e.g., KMeans, DBSCAN, etc.) which will be used to perform clustering.
-    - target_column (str, optional): The column name for the ground-truth labels (default is 'y_true'). 
-      If provided and `remap_labels` is `True`, the function will attempt to remap the cluster labels 
-      to match the most frequent label from the target column within each cluster.
-    - remap_labels (bool, optional): If `True`, cluster labels will be remapped to match the most frequent 
-      ground-truth label in each cluster. Default is `False`.
+    - clusterer (sklearn.cluster object or similar): A clustering algorithm with `fit` method.
+    - target_column (str, optional): The ground-truth label column name (default is 'y_true').
+    - remap_labels (bool, optional): If `True`, cluster labels will be remapped using Hungarian method 
+      for best matching to the true labels.
 
     Returns:
-    - np.ndarray: An array of predicted cluster labels, possibly remapped according to the target column.
+    - np.ndarray: Array of predicted (possibly remapped) cluster labels.
 
     Raises:
-    - ValueError: If `df` is not a DataFrame, if any feature columns are missing from `df`, 
-      or if the `target_column` is not found in `df` when `remap_labels` is `True`.
-      """
-
-    # Validate input
+    - ValueError: If inputs are invalid.
+    """
+    # --- Validate input ---
     if not isinstance(df, pd.DataFrame):
         raise ValueError("Input df must be a pandas DataFrame.")
     
     if not all(col in df.columns for col in feature_columns):
         raise ValueError(f"Some feature columns are missing from the DataFrame: {feature_columns}")
     
-    if target_column and target_column not in df.columns:
+    if remap_labels and (target_column not in df.columns):
         raise ValueError(f"Target column '{target_column}' not found in DataFrame.")
 
     features = df[feature_columns].to_numpy()
 
-    # Fit the clustering model
+    # --- Fit the clustering model ---
     clusterer.fit(features)
     cluster_labels = clusterer.labels_ if hasattr(clusterer, 'labels_') else clusterer.predict(features)
 
-    # Optionally remap clusters to dominant true labels (if target column exists)
+    # --- Remap labels using Hungarian method if requested ---
     if remap_labels and target_column in df.columns:
-        labels = np.copy(cluster_labels)
-        for i in np.unique(cluster_labels):
-            if i == -1:  # Skip noise in DBSCAN
-                continue
-            mask = (cluster_labels == i)
-            if np.any(mask):
-                labels[mask] = mode(df.loc[mask, target_column], keepdims=True).mode[0]
+        labels = remap_clusters_hungarian(cluster_labels, df[target_column].to_numpy())
     else:
         labels = cluster_labels
 
@@ -164,21 +167,11 @@ def copk_means_clustering(df, feature_columns, target_column='y_true', label_col
     
     # If remapping is required, remap the clusters to match the most frequent ground-truth label
     if remap_labels and target_column in df.columns:
-        remapped_labels = np.copy(clusters)
-        for cluster_id in np.unique(clusters):
-            if cluster_id == -1 or np.sum(clusters == cluster_id) == 0:
-                continue
-
-            # Find the most frequent ground-truth label in the cluster
-            mask = (clusters == cluster_id)
-            most_common_label = mode(df.loc[mask, target_column], keepdims=True).mode[0]
-            remapped_labels[mask] = most_common_label
-        
+        remapped_labels = remap_clusters_hungarian(clusters, df[target_column].to_numpy())
         df['COPKMeans'] = remapped_labels
     else:
-        # Directly assign the clusters if no remapping is required
         df['COPKMeans'] = clusters
-    
+        
     return df
 
 def seeded_k_means_clustering(df, feature_columns, target_column='y_true', seeds='y_live', n_clusters=3, random_state=0, remap_labels=False):
