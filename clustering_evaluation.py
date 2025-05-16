@@ -86,10 +86,35 @@ os.makedirs(results_folder, exist_ok=True)
 
 # Define save_df helper
 def save_df(df, filename_prefix, dataset_name, results_folder):
-    filename = os.path.join(results_folder, f"{filename_prefix}_{dataset_name}.csv")
+    filename = os.path.join(results_folder, f"{filename_prefix}_{dataset_name}")
     df.to_csv(filename, index=False)
     print(f"{filename_prefix.replace('_', ' ').capitalize()} saved to {filename}")
-        
+
+# Define save_metrics helper
+def save_metrics(metrics, prefix, dataset_name, results_folder):
+    """
+    Converts supervised clustering results into a DataFrame, adds metadata, prints and saves it.
+
+    Parameters:
+    - supervised_results (dict): Dictionary of {method_name: {metric_name: value}}.
+    - dataset_name (str): Name of the dataset used for clustering.
+    - results_folder (str): Folder where results should be saved. Default is 'results'.
+    """
+    # Convert to DataFrame
+    df = pd.DataFrame.from_dict(metrics, orient='index')
+
+    # Move algorithm names to a column
+    df.reset_index(inplace=True)
+    df.rename(columns={'index': 'Algorithm'}, inplace=True)
+
+    # Add dataset name
+    df['Dataset'] = dataset_name
+
+    # Output and save
+    print(f"\n{prefix} clustering metrics:")
+    print(df)
+    save_df(df, prefix, dataset_name, results_folder=results_folder)
+    
 # %%
 # ---------------------------- Dataset Configuration ------------------------
 
@@ -284,81 +309,72 @@ print(runtime_df)
 save_df(runtime_df, "runtime", dataset_name, results_folder)
 
 # %%
-# ---------------------------- Supervised Evaluation ------------------------
-def save_metrics(supervised_results, prefix, dataset_name, results_folder):
+# ---------------------------- Metric Evaluation ------------------------
+
+def evaluate_clustering_metrics(df, dataset_name, clustering_flags,feature_columns):
     """
-    Converts supervised clustering results into a DataFrame, adds metadata, prints and saves it.
+    Evaluates all clustering metrics (supervised and unsupervised) and saves a unified table.
 
     Parameters:
-    - supervised_results (dict): Dictionary of {method_name: {metric_name: value}}.
-    - dataset_name (str): Name of the dataset used for clustering.
-    - results_folder (str): Folder where results should be saved. Default is 'results'.
+    - df (pd.DataFrame): DataFrame with clustering predictions and optionally ground truth in 'y_true'.
+    - dataset_name (str): Name of dataset for output naming.
+    - clustering_flags (dict): {method_name: bool} for enabled clustering methods.
+    - feature_columns (list): Feature columns used for unsupervised metrics.
     """
+    # Enabled clustering methods
+    clustering_methods = [name for name, enabled in clustering_flags.items() if enabled]
+
+    # Define all metrics: (metric_name, function, requires_ground_truth)
+    all_metrics = [
+        ('Accuracy', compute_accuracy, True), # same as purity here
+        ('Purity', compute_purity, True),
+        ('Homogeneity', compute_homogeneity, True),
+        ('Completeness', compute_completeness, True),
+        ('V-Measure', compute_v_measure, True),# same as NMI here
+        ('NMI', compute_nmi, True),
+        ('ARI', compute_ari, True),
+        ('FMI', compute_fmi, True),
+        ('Silhouette Score', compute_silhouette, False),
+        ('Davies-Bouldin Index', compute_davies_bouldin, False),
+        ('Calinski-Harabasz Index', compute_calinski_harabasz, False),
+    ]
+
+    results = []
+    for method in clustering_methods:
+        row = {'Algorithm': method}
+        for metric_name, func, requires_gt in all_metrics:
+            try:
+                # compute supervised metrics
+                if requires_gt:
+                    if 'y_true' not in df.columns:
+                        row[metric_name] = None
+                        continue
+                    score = func(df, true_col='y_true', pred_col=method)
+                # compute unsupervised metrics
+                else:
+                    score = func(df, pred_col=method, features=feature_columns)
+                row[metric_name] = score
+            except Exception as e:
+                print(f"Error computing {metric_name} for {method}: {e}")
+                row[metric_name] = None
+        results.append(row)
+
     # Convert to DataFrame
-    supervised_metrics_df = pd.DataFrame.from_dict(supervised_results, orient='index')
+    metrics_df = pd.DataFrame(results).round(4)
+    metrics_df['Dataset'] = dataset_name
 
-    # Move algorithm names to a column
-    supervised_metrics_df.reset_index(inplace=True)
-    supervised_metrics_df.rename(columns={'index': 'Algorithm'}, inplace=True)
+    return metrics_df
 
-    # Add dataset name
-    supervised_metrics_df['Dataset'] = dataset_name
+df_metrics = evaluate_clustering_metrics(df=df, dataset_name=dataset_name, 
+                                         clustering_flags=clustering_flags, 
+                                         feature_columns=feature_columns,  
+)
 
-    # Output and save
-    print("\nSupervised Clustering Metrics:")
-    print(supervised_metrics_df)
-    save_df(supervised_metrics_df, prefix, dataset_name, results_folder=results_folder)
+# save the metrics DataFrame
+save_df(df_metrics, "clustering_metrics", dataset_name, results_folder=results_folder)
 
-    return supervised_metrics_df
-
-# Automatically determine enabled clustering methods from flags
-clustering_methods = [name for name, enabled in clustering_flags.items() if enabled]
-
-# Define clustering quality metrics requiring ground truth
-supervised_metrics = {
-    'Accuracy': compute_accuracy,
-    'Purity': compute_purity,
-    'Homogeneity': compute_homogeneity,
-    'Completeness': compute_completeness,
-    'V-Measure': compute_v_measure,
-    'NMI': compute_nmi,
-    'ARI': compute_ari,
-    'FMI': compute_fmi,
-}
-
-# Compute all metrics in one nested dictionary: {algorithm: {metric: value}}
-supervised_results = {
-    method: {
-        metric: func(df, true_col='y_true', pred_col=method)
-        for metric, func in supervised_metrics.items()
-    }
-    for method in clustering_methods
-}
-
-save_metrics(supervised_results, 'supervised_metrics', dataset_name, results_folder)
-
-# %% ---------------------------- Unsupervised Evaluation ------------------------
-
-unsupervised_metrics = {
-    'Silhouette Score': compute_silhouette,
-    'Davies-Bouldin Index': compute_davies_bouldin,
-    'Calinski-Harabasz Index': compute_calinski_harabasz,
-}
-
-# Compute all unsupervised metrics in a nested dictionary: {algorithm: {metric: value}}
-unsupervised_results = {}
-for method in clustering_methods:
-    method_results = {}
-    for metric_name, func in unsupervised_metrics.items():
-        try:
-            score = func(df, pred_col=method, features=feature_columns)
-            method_results[metric_name] = score
-        except Exception as e:
-            print(f"Error computing {metric_name} for {method}: {e}")
-            method_results[metric_name] = None
-    unsupervised_results[method] = method_results
-
-save_metrics(unsupervised_results, 'unsupervised_metrics', dataset_name, results_folder)
+# show the metrics DataFrame
+df_metrics
 
 # %%
 
