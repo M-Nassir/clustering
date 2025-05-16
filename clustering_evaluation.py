@@ -85,7 +85,7 @@ results_folder = 'results'
 os.makedirs(results_folder, exist_ok=True)
 
 # Define save_df helper
-def save_df(df, filename_prefix, dataset_name):
+def save_df(df, filename_prefix, dataset_name, results_folder):
     filename = os.path.join(results_folder, f"{filename_prefix}_{dataset_name}.csv")
     df.to_csv(filename, index=False)
     print(f"{filename_prefix.replace('_', ' ').capitalize()} saved to {filename}")
@@ -94,7 +94,7 @@ def save_df(df, filename_prefix, dataset_name):
 # ---------------------------- Dataset Configuration ------------------------
 
 # Define dataset name, note all features must be numeric
-dataset_name = "2d_gauss"  # Options: "1d_simple", 
+dataset_name = "Seed_Data_class.csv"  # Options: "1d_simple", 
 #                              "1d_gauss", 
 #                              "2d_gauss", 
 #                              "Seed_Data_class.csv" 
@@ -105,59 +105,76 @@ random_seed = 365 #np.random.randint(0, 10000)
 gauss_feature_numbers = 2 
 
 # %% read in dataset
-if dataset_name == "1d_simple":
-    num_clusters = 3
-    df = generate_clustering_1d_data(repeat_const=100, 
-                                     percent_labelled=0.03, 
-                                     random_state=random_seed)
-    plot_title = dataset_name + ' (all data with histogram overlay)'
 
-elif dataset_name == "1d_gauss":
-    num_clusters = 3
-    df = generate_clustering_1d_gauss_anomalies(random_seed=random_seed,
-                                               labelled_percent=0.1,
-                                               cluster_params=[
-                                                   (0, 1), (50, 3), (100, 6)
-                                                   ],
-                                               samples_per_cluster=10000,
-                                               include_anomaly_cluster=True,
-                                               )
-    plot_title = dataset_name + ' (all data with histogram overlay)'
+dataset_list = [
+    "1d_simple", 
+    "1d_gauss", 
+    "2d_gauss", 
+    "Seed_Data_class.csv"
+]
 
-elif dataset_name == "2d_gauss":
-    num_clusters=5
-    
-    # Define cluster standard deviations
-    same_density = False
-    if same_density:
-        std_dev = 0.6
-    else:
-        # Set different std deviations for each component
-        std_dev = [1.5, 0.8, 1.2, 3, 0.4][:num_clusters]
-        
-    df = generate_clustering_2d_gauss_data(n_samples=10000,
-                                        n_components=num_clusters,
-                                        num_features=gauss_feature_numbers,
-                                        rand_seed=random_seed,
-                                        same_density=False,
-                                        labelled_fraction=0.01,
-                                        add_anomaly_cluster=True,
-                                        std_dev=std_dev,
-                                        )
-    plot_title = dataset_name + ' (all data)'
+def load_dataset(dataset_name, random_seed = 365): #np.random.randint(0, 10000)
+    if dataset_name == "1d_simple":
+        num_clusters = 3
+        df = generate_clustering_1d_data(repeat_const=100, 
+                                        percent_labelled=0.03, 
+                                        random_state=random_seed)
+        plot_title = dataset_name + ' (all data with histogram overlay)'
 
-else:
-    df, num_clusters = load_and_prepare_dataset(dataset_name, 
-                                                label_column='class', 
-                                                percent_labelled=0.05
+    elif dataset_name == "1d_gauss":
+        num_clusters = 3
+        df = generate_clustering_1d_gauss_anomalies(random_seed=random_seed,
+                                                labelled_percent=0.1,
+                                                cluster_params=[
+                                                    (0, 1), (50, 3), (100, 6)
+                                                    ],
+                                                samples_per_cluster=10000,
+                                                include_anomaly_cluster=True,
                                                 )
+        plot_title = dataset_name + ' (all data with histogram overlay)'
+
+    elif dataset_name == "2d_gauss":
+        num_clusters=5
+        
+        # Define cluster standard deviations
+        same_density = False
+        if same_density:
+            std_dev = 0.6
+        else:
+            # Set different std deviations for each component
+            std_dev = [1.5, 0.8, 1.2, 3, 0.4][:num_clusters]
+            
+        df = generate_clustering_2d_gauss_data(n_samples=10000,
+                                            n_components=num_clusters,
+                                            num_features=gauss_feature_numbers,
+                                            rand_seed=random_seed,
+                                            same_density=False,
+                                            labelled_fraction=0.01,
+                                            add_anomaly_cluster=True,
+                                            std_dev=std_dev,
+                                            )
+        plot_title = dataset_name + ' (all data)'
+
+    else:
+        df, num_clusters = load_and_prepare_dataset(dataset_name, 
+                                                    label_column='class', 
+                                                    percent_labelled=0.05
+                                                    )
+        plot_title = dataset_name + ' (all data)'
+        
+    return df, num_clusters, plot_title
+
+# Load the dataset
+df, num_clusters, plot_title = load_dataset(dataset_name)
      
 # Extract feature columns from the DataFrame
 feature_columns = [col for col in df.columns if col not in {'y_true', 'y_live'}]
 
 # %% Plot dataset and seeds only separately
-plot_clusters(df, feature_columns, label_column='y_true', title=plot_title, show_seeds_only=False)
-plot_clusters(df, feature_columns, label_column='y_live', title=dataset_name + ' (seeds only)', show_seeds_only=True)
+plot_clusters(df, feature_columns, label_column='y_true', 
+              title=plot_title, show_seeds_only=False)
+plot_clusters(df, feature_columns, label_column='y_live', 
+              title=dataset_name + ' (seeds only)', show_seeds_only=True)
 
 # %%
 # ---------------------------- Clustering Algorithm Setup ------------------------
@@ -264,10 +281,35 @@ runtime_df = pd.DataFrame([
 # Print the runtime and DataFrame
 print("\nRuntimes (in seconds):")
 print(runtime_df)
-save_df(runtime_df, "runtime", dataset_name)
+save_df(runtime_df, "runtime", dataset_name, results_folder)
 
 # %%
 # ---------------------------- Supervised Evaluation ------------------------
+def save_metrics(supervised_results, prefix, dataset_name, results_folder):
+    """
+    Converts supervised clustering results into a DataFrame, adds metadata, prints and saves it.
+
+    Parameters:
+    - supervised_results (dict): Dictionary of {method_name: {metric_name: value}}.
+    - dataset_name (str): Name of the dataset used for clustering.
+    - results_folder (str): Folder where results should be saved. Default is 'results'.
+    """
+    # Convert to DataFrame
+    supervised_metrics_df = pd.DataFrame.from_dict(supervised_results, orient='index')
+
+    # Move algorithm names to a column
+    supervised_metrics_df.reset_index(inplace=True)
+    supervised_metrics_df.rename(columns={'index': 'Algorithm'}, inplace=True)
+
+    # Add dataset name
+    supervised_metrics_df['Dataset'] = dataset_name
+
+    # Output and save
+    print("\nSupervised Clustering Metrics:")
+    print(supervised_metrics_df)
+    save_df(supervised_metrics_df, prefix, dataset_name, results_folder=results_folder)
+
+    return supervised_metrics_df
 
 # Automatically determine enabled clustering methods from flags
 clustering_methods = [name for name, enabled in clustering_flags.items() if enabled]
@@ -293,20 +335,7 @@ supervised_results = {
     for method in clustering_methods
 }
 
-# Convert to DataFrame
-supervised_metrics_df = pd.DataFrame.from_dict(supervised_results, orient='index')
-
-# Move algorithm names to a column
-supervised_metrics_df.reset_index(inplace=True)
-supervised_metrics_df.rename(columns={'index': 'Algorithm'}, inplace=True)
-
-# Add dataset name
-supervised_metrics_df['Dataset'] = dataset_name
-
-# Output and save
-print("\nSupervised Clustering Metrics:")
-print(supervised_metrics_df)
-save_df(supervised_metrics_df, "supervised_metrics", dataset_name)
+save_metrics(supervised_results, 'supervised_metrics', dataset_name, results_folder)
 
 # %% ---------------------------- Unsupervised Evaluation ------------------------
 
@@ -329,20 +358,7 @@ for method in clustering_methods:
             method_results[metric_name] = None
     unsupervised_results[method] = method_results
 
-# Convert to DataFrame
-unsupervised_metrics_df = pd.DataFrame.from_dict(unsupervised_results, orient='index')
-
-# Move algorithm names to a column
-unsupervised_metrics_df.reset_index(inplace=True)
-unsupervised_metrics_df.rename(columns={'index': 'Algorithm'}, inplace=True)
-
-# Add dataset name
-unsupervised_metrics_df['Dataset'] = dataset_name
-
-# Output and save
-print("\nUnsupervised Clustering Metrics:")
-print(unsupervised_metrics_df)
-save_df(unsupervised_metrics_df, "unsupervised_metrics", dataset_name)
+save_metrics(unsupervised_results, 'unsupervised_metrics', dataset_name, results_folder)
 
 # %%
 
