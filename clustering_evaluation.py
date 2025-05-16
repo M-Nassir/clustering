@@ -68,9 +68,6 @@ from clustering_methods import (
     seeded_k_means_clustering, novel_clustering, dec_clustering
 )
 
-# deep learning methods
-from dec_clustering import run_dec_clustering_from_dataframe
-
 # Plotting
 from utilities.plotting import plot_clusters
 from utilities.cluster_utilities import load_and_prepare_dataset
@@ -353,20 +350,6 @@ print(unsupervised_metrics_df)
 
 save_df(unsupervised_metrics_df, "unsupervised_metrics", dataset_name)
 
-# %%
-# ---------------------------- DEC clustering method ------------------------
 
-# df_dec = run_dec_clustering_from_dataframe(
-#     df.copy(),
-#     target_column='y_true',
-#     n_clusters=num_clusters,
-#     pretrain_epochs=100,
-#     train_epochs=100,
-#     batch_size=256,
-#     lr=1e-3,
-#     weight_decay=1e-5,
-#     save_dir='saves'
-# )
 
-# plot_clusters(df_dec, feature_columns, label_column='cluster', title='DEC clustering', colors=None)
 
