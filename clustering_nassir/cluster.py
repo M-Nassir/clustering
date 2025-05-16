@@ -99,7 +99,7 @@ class NovelClustering:
 
             # testing tracking; remove in future
             itr = itr + 1
-            print(itr)
+            # print(itr)
 
             # this will be reset to true if a cluster assignment change occurs
             cco = False
