@@ -70,7 +70,7 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
     # --- Remap labels using Hungarian method if requested ---
     if remap_labels and target_column in df.columns:
         labels = remap_clusters_hungarian_with_noise(cluster_labels, df[target_column].to_numpy())
-        print(f"Remapped labels: {labels}")
+        # print(f"Remapped labels: {labels}")
     else:
         labels = cluster_labels
 
