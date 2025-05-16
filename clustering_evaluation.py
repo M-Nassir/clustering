@@ -45,7 +45,6 @@ semi-supervised settings where partial label information is available. It is fle
 for experimentation with new clustering methods.
 """
 
-
 # %%
 # ---------------------------- Imports and setup -----------------
 import os
@@ -181,10 +180,8 @@ clustering_flags = {
     'SeededKMeans': True,
     'novel_method': True,
 
-    # Deep learning unsupervised and semi-supervised
+    # Deep learning (self-)unsupervised 
     'DEC': True,
-    'S_DEC': False,
-    'CDC': False,
 }
 
 # Clustering method configuration
@@ -267,7 +264,6 @@ runtime_df = pd.DataFrame([
 # Print the runtime and DataFrame
 print("\nRuntimes (in seconds):")
 print(runtime_df)
-
 save_df(runtime_df, "runtime", dataset_name)
 
 # %%
@@ -310,7 +306,6 @@ supervised_metrics_df['Dataset'] = dataset_name
 # Output and save
 print("\nSupervised Clustering Metrics:")
 print(supervised_metrics_df)
-
 save_df(supervised_metrics_df, "supervised_metrics", dataset_name)
 
 # %% ---------------------------- Unsupervised Evaluation ------------------------
@@ -347,9 +342,8 @@ unsupervised_metrics_df['Dataset'] = dataset_name
 # Output and save
 print("\nUnsupervised Clustering Metrics:")
 print(unsupervised_metrics_df)
-
 save_df(unsupervised_metrics_df, "unsupervised_metrics", dataset_name)
 
-
+# %%
 
 
