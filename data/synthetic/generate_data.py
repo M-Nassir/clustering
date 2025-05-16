@@ -263,6 +263,8 @@ def generate_clustering_2d_gauss_data(
     - df (pd.DataFrame): DataFrame with 'f0', ..., 'fN', 'y_true', and 'y_live'.
     """
 
+    np.random.seed(rand_seed)
+    
     # Generate the main clusters
     X, y_true = make_blobs(
         n_samples=n_samples,
