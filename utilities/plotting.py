@@ -16,6 +16,10 @@ def plot_clusters(df, feature_columns, label_column, title=None, colors=None, sh
     - show_seeds_only (bool): Whether to show only seed points (exclude noise).
     """
 
+    # set figure sizes
+    fig_height = 12
+    fig_width = 8
+    
     # Set colors
     if colors is None:
         cud_palette = ['#E69F00', '#56B4E9', '#009E73', '#F0E442', 
@@ -42,7 +46,7 @@ def plot_clusters(df, feature_columns, label_column, title=None, colors=None, sh
     if len(feature_columns) == 1:
         # 1D plotting
         xcol = feature_columns[0]
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(fig_height, fig_width))
         if not show_seeds_only:
             sns.histplot(df, x=xcol, bins=1000, color='lightgrey', ax=ax)
             ax.set_ylabel('Frequency')
@@ -64,7 +68,7 @@ def plot_clusters(df, feature_columns, label_column, title=None, colors=None, sh
         plot_df = df.copy()
         if show_seeds_only:
             plot_df = plot_df[plot_df[label_column] != -1]
-        fig, ax = plt.subplots(figsize=(18, 10))
+        fig, ax = plt.subplots(figsize=(fig_height, fig_width))
         sns.scatterplot(
             x=plot_df[feature_columns[0]],
             y=plot_df[feature_columns[1]],
