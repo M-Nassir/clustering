@@ -12,7 +12,6 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 from clustpy.deep import DEC
 
-
 def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
 
     y_pred = np.asarray(y_pred)

@@ -2,10 +2,18 @@
 # %%
 # ---------------------------- Imports and setup -----------------
 import os
+import sys
 import time
 import pandas as pd
 from IPython.display import display
 
+# Get the current working directory (where the notebook is running from)
+notebook_dir = os.getcwd()
+# Go up 1 level to reach the 'clustering' project root
+root_path = os.path.abspath(os.path.join(notebook_dir, '../'))
+if root_path not in sys.path:
+    sys.path.insert(0, root_path)
+    
 # Clustering methods
 from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
@@ -238,4 +246,4 @@ df_metrics = evaluate_clustering_metrics(df=df, metrics_dict=all_metrics,
 save_df(df_metrics, "clustering_metrics", dataset_name, results_folder=results_folder)
 display(df_metrics)
 
-
+# %%
