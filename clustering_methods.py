@@ -32,7 +32,8 @@ def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
 
     return remapped
 
-def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true', remap_labels=False):
+def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true', 
+                           remap_labels=False):
     """
     Perform clustering using the specified clustering algorithm and optionally remap cluster labels 
     using the Hungarian algorithm to best match ground-truth labels.
@@ -82,7 +83,8 @@ def kmeans_clustering(df, feature_columns, target_column='y_true', n_clusters=3,
     df['KMeans'] = cluster_with_remapping(df, feature_columns, kmeans, target_column, remap_labels)
     return df
 
-def meanshift_clustering(df, feature_columns, target_column='y_true', bandwidth=None, remap_labels=False):
+def meanshift_clustering(df, feature_columns, target_column='y_true', bandwidth=None, 
+                         remap_labels=False):
     bw = bandwidth or estimate_bandwidth(df[feature_columns].to_numpy(), quantile=0.2, n_samples=500)
     ms = MeanShift(bandwidth=bw, bin_seeding=True)
     df['MeanShift'] = cluster_with_remapping(df, feature_columns, ms, target_column, remap_labels)
@@ -103,7 +105,8 @@ def hdbscan_clustering(df, feature_columns, target_column='y_true', min_cluster_
 def agglomerative_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
                              linkage='ward', remap_labels=False):
     agglo = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage)
-    df['Agglomerative'] = cluster_with_remapping(df, feature_columns, agglo, target_column, remap_labels)
+    df['Agglomerative'] = cluster_with_remapping(df, feature_columns, agglo, 
+                                                 target_column, remap_labels)
     return df
 
 def gmm_clustering(df, feature_columns, target_column='y_true', n_components=3, remap_labels=False):
@@ -111,11 +114,14 @@ def gmm_clustering(df, feature_columns, target_column='y_true', n_components=3, 
     df['GMM'] = cluster_with_remapping(df, feature_columns, gmm, target_column, remap_labels)
     return df
 
-def spectral_clustering(df, feature_columns, target_column='y_true', n_clusters=3, affinity='nearest_neighbors', remap_labels=False):
+def spectral_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
+                        affinity='nearest_neighbors', remap_labels=False):
     spectral = SpectralClustering(n_clusters=n_clusters, affinity=affinity, random_state=0)
-    df['Spectral'] = cluster_with_remapping(df, feature_columns, spectral, target_column, remap_labels)
+    df['Spectral'] = cluster_with_remapping(df, feature_columns, spectral, 
+                                            target_column, remap_labels)
     return df
 
+# ----------------------------------- Constrained kmeans -----------------------------------
 def constrained_kmeans_clustering(df, feature_columns, target_column='y_true',
                                   n_clusters=3, size_min=None, size_max=None,
                                   random_state=0, remap_labels=False):
@@ -142,7 +148,7 @@ def constrained_kmeans_clustering(df, feature_columns, target_column='y_true',
     df['ConstrainedKMeans'] = labels
     return df
 
-# -----------------------------------COPK-means-----------------------------------
+# ----------------------------------- COPK-means -----------------------------------
 
 from itertools import combinations, product
 
@@ -169,7 +175,8 @@ def copk_means_clustering(df, feature_columns, target_column='y_true', label_col
     must_link, cannot_link = generate_constraints_from_labels(df, label_column=label_column)
 
     # Perform COPK-means clustering
-    clusters, centers = cop_kmeans(dataset=df[feature_columns].to_numpy(), k=num_clusters, ml=must_link, cl=cannot_link)
+    clusters, centers = cop_kmeans(dataset=df[feature_columns].to_numpy(), 
+                                   k=num_clusters, ml=must_link, cl=cannot_link)
     
     # If remapping is required, remap the clusters to match the most frequent ground-truth label
     if remap_labels and target_column in df.columns:
@@ -180,9 +187,13 @@ def copk_means_clustering(df, feature_columns, target_column='y_true', label_col
         
     return df
 
-def seeded_k_means_clustering(df, feature_columns, target_column='y_true', seeds='y_live', n_clusters=3, random_state=0, remap_labels=False):
+# ----------------------------------- Seeded kmeans -----------------------------------
+def seeded_k_means_clustering(df, feature_columns, target_column='y_true', 
+                              seeds='y_live', n_clusters=3, random_state=0, 
+                              remap_labels=False):
     """
-    Perform KMeans clustering with predefined initial centroids calculated from the 'y_live' column
+    Perform KMeans clustering with predefined initial centroids 
+    calculated from the 'y_live' column
     and add a 'SeededKMeans' column to the DataFrame.
     """
     # Get seed points (where y_live != -1)
@@ -193,7 +204,8 @@ def seeded_k_means_clustering(df, feature_columns, target_column='y_true', seeds
         initial_centroids = grouped.to_numpy()
 
         if len(initial_centroids) != n_clusters:
-            print(f"Warning: Found {len(initial_centroids)} seed centroids, but n_clusters={n_clusters}. Falling back to default init.")
+            print(f"Warning: Found {len(initial_centroids)} \
+                  seed centroids, but n_clusters={n_clusters}. Falling back to default init.")
             initial_centroids = 'k-means++'
             n_init = 10
         else:
@@ -203,13 +215,13 @@ def seeded_k_means_clustering(df, feature_columns, target_column='y_true', seeds
         n_init = 10
 
     # Perform KMeans with the calculated initial centroids
-    kmeans = KMeans(n_clusters=n_clusters, init=initial_centroids, n_init=n_init, random_state=random_state)
-    df['SeededKMeans'] = cluster_with_remapping(df, feature_columns, kmeans, target_column, remap_labels)
+    kmeans = KMeans(n_clusters=n_clusters, init=initial_centroids, n_init=n_init, 
+                    random_state=random_state)
+    df['SeededKMeans'] = cluster_with_remapping(df, feature_columns, kmeans, 
+                                                target_column, remap_labels)
     return df
 
-# %%
-# ---------------------------- Novel clustering method ------------------------
-
+# ----------------------------------- Novel clustering method -----------------------------------
 def novel_clustering(df, feature_columns, seeds='y_live'):
     """
     Perform clustering using novel clustering method and add a column to the DataFrame.
@@ -226,15 +238,18 @@ def novel_clustering(df, feature_columns, seeds='y_live'):
     df['novel_method'] = novel_method.fit(num_d)
     return df
 
+# ----------------------------------- Deep Embedding Clustering (DEC) --------------------------------
 def dec_clustering(df, feature_columns, num_clusters=3, 
                    pretrain_epochs=10, clustering_epochs=10, 
                    target_column='y_true', remap_labels=True):
-    dec = DEC(n_clusters=num_clusters, pretrain_epochs=pretrain_epochs, clustering_epochs=clustering_epochs)
+    dec = DEC(n_clusters=num_clusters, pretrain_epochs=pretrain_epochs, 
+              clustering_epochs=clustering_epochs)
     dec.fit(df[feature_columns].to_numpy())
 
     # If remapping is required, remap the clusters to match the most frequent ground-truth label
     if remap_labels and target_column in df.columns:
-        remapped_labels = remap_clusters_hungarian_with_noise(dec.labels_, df[target_column].to_numpy())
+        remapped_labels = remap_clusters_hungarian_with_noise(dec.labels_, 
+                                                              df[target_column].to_numpy())
         df['DEC'] = remapped_labels
     else:
         df['DEC'] = dec.labels_
