@@ -4,7 +4,6 @@
 import os
 import time
 import pandas as pd
-import numpy as np
 
 # Clustering methods
 from clustering_methods import (
@@ -17,7 +16,7 @@ from clustering_methods import (
 # Plotting
 from utilities.plotting import plot_clusters
 from utilities.cluster_utilities import (load_dataset, 
-                                         save_df, save_metrics
+                                         save_df
 )
 
 # Evaluation metrics
@@ -148,6 +147,7 @@ clustering_configs = {
     },
 }
 
+# Apply clustering algorithms
 def apply_clustering_algorithms(df, configs, flags, features, plot=True):
     runtimes = {}
     for name, config in configs.items():
@@ -177,7 +177,23 @@ runtime_df
 
 # %%
 # ---------------------------- Metric Evaluation ------------------------
-def evaluate_clustering_metrics(df, dataset_name, clustering_flags,feature_columns):
+
+# Define all metrics: (metric_name, function, requires_ground_truth)
+all_metrics = [
+    ('Accuracy', compute_accuracy, True), # same as purity here
+    ('Purity', compute_purity, True),
+    ('Homogeneity', compute_homogeneity, True),
+    ('Completeness', compute_completeness, True),
+    ('V-Measure', compute_v_measure, True),# same as NMI here
+    ('NMI', compute_nmi, True),
+    ('ARI', compute_ari, True),
+    ('FMI', compute_fmi, True),
+    ('Silhouette Score', compute_silhouette, False),
+    ('Davies-Bouldin Index', compute_davies_bouldin, False),
+    ('Calinski-Harabasz Index', compute_calinski_harabasz, False),
+]
+    
+def evaluate_clustering_metrics(df, metrics_dict, dataset_name, clustering_flags,feature_columns):
     """
     Evaluates all clustering metrics (supervised and unsupervised) and saves a unified table.
 
@@ -190,25 +206,10 @@ def evaluate_clustering_metrics(df, dataset_name, clustering_flags,feature_colum
     # Enabled clustering methods
     clustering_methods = [name for name, enabled in clustering_flags.items() if enabled]
 
-    # Define all metrics: (metric_name, function, requires_ground_truth)
-    all_metrics = [
-        ('Accuracy', compute_accuracy, True), # same as purity here
-        ('Purity', compute_purity, True),
-        ('Homogeneity', compute_homogeneity, True),
-        ('Completeness', compute_completeness, True),
-        ('V-Measure', compute_v_measure, True),# same as NMI here
-        ('NMI', compute_nmi, True),
-        ('ARI', compute_ari, True),
-        ('FMI', compute_fmi, True),
-        ('Silhouette Score', compute_silhouette, False),
-        ('Davies-Bouldin Index', compute_davies_bouldin, False),
-        ('Calinski-Harabasz Index', compute_calinski_harabasz, False),
-    ]
-
     results = []
     for method in clustering_methods:
         row = {'Algorithm': method}
-        for metric_name, func, requires_gt in all_metrics:
+        for metric_name, func, requires_gt in metrics_dict:
             try:
                 # compute supervised metrics
                 if requires_gt:
@@ -231,7 +232,8 @@ def evaluate_clustering_metrics(df, dataset_name, clustering_flags,feature_colum
 
     return metrics_df
 
-df_metrics = evaluate_clustering_metrics(df=df, dataset_name=dataset_name, 
+df_metrics = evaluate_clustering_metrics(df=df, metrics_dict=all_metrics, 
+                                         dataset_name=dataset_name, 
                                          clustering_flags=clustering_flags, 
                                          feature_columns=feature_columns,  
 )
