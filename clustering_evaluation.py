@@ -38,7 +38,7 @@ os.makedirs(results_folder, exist_ok=True)
 
 num_clusters = None  
 plot_title = None
-random_seed = 365 #np.random.randint(0, 10000)
+random_seed = 366 #np.random.randint(0, 10000)
 
 # %% read in dataset
 dataset_list = [
@@ -52,7 +52,7 @@ dataset_name = dataset_list[2]
 
 # Load dataset
 #np.random.randint(0, 10000)
-df, num_clusters, plot_title = load_dataset(dataset_name, random_seed = 365)
+df, num_clusters, plot_title = load_dataset(dataset_name, random_seed = random_seed)
      
 # Extract feature columns from the DataFrame
 feature_columns = [col for col in df.columns if col not in {'y_true', 'y_live'}]
