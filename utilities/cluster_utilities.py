@@ -5,12 +5,19 @@ Created on Mon Feb  6 13:05:33 2023
 
 @author: nassirmohammad
 """
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn import metrics
 from scipy.optimize import linear_sum_assignment as linear_assignment
+# Synthetic data generators    
+from data.synthetic.generate_data import (
+    generate_clustering_1d_data, 
+    generate_clustering_1d_gauss_anomalies, 
+    generate_clustering_2d_gauss_data
+)
 
 # specify colours for plotting
 colors = {-1: 'red', 0: 'green', 1: 'blue', 2: 'black',
@@ -121,7 +128,7 @@ def get_seeds(df, percent, random_seed=1):
 
     # df_seeds = df.loc[(df['y_live'] != -1)]
 
-def load_and_prepare_dataset(dataset_name, label_column='class', percent_labelled=0.05, 
+def prepare_dataset(dataset_name, label_column='class', percent_labelled=0.05, 
                              min_labels_per_cluster=15):
     """
     Load a dataset from CSV, rename the label column to 'y_true', determine number of clusters,
@@ -172,3 +179,85 @@ def load_and_prepare_dataset(dataset_name, label_column='class', percent_labelle
     df.loc[labelled_indices, 'y_live'] = df.loc[labelled_indices, 'y_true']
 
     return df, k
+
+# Define save_df helper
+def save_df(df, filename_prefix, dataset_name, results_folder):
+    filename = os.path.join(results_folder, f"{filename_prefix}_{dataset_name}")
+    df.to_csv(filename, index=False)
+    print(f"{filename_prefix.replace('_', ' ').capitalize()} saved to {filename}")
+
+# Define save_metrics helper
+def save_metrics(metrics, prefix, dataset_name, results_folder):
+    """
+    Converts supervised clustering results into a DataFrame, adds metadata, prints and saves it.
+
+    Parameters:
+    - supervised_results (dict): Dictionary of {method_name: {metric_name: value}}.
+    - dataset_name (str): Name of the dataset used for clustering.
+    - results_folder (str): Folder where results should be saved. Default is 'results'.
+    """
+    # Convert to DataFrame
+    df = pd.DataFrame.from_dict(metrics, orient='index')
+
+    # Move algorithm names to a column
+    df.reset_index(inplace=True)
+    df.rename(columns={'index': 'Algorithm'}, inplace=True)
+
+    # Add dataset name
+    df['Dataset'] = dataset_name
+
+    # Output and save
+    print(f"\n{prefix} clustering metrics:")
+    print(df)
+    save_df(df, prefix, dataset_name, results_folder=results_folder)
+
+def load_dataset(dataset_name, random_seed = 365): #np.random.randint(0, 10000)
+    if dataset_name == "1d_simple":
+        num_clusters = 3
+        df = generate_clustering_1d_data(repeat_const=100, 
+                                        percent_labelled=0.03, 
+                                        random_state=random_seed)
+        plot_title = dataset_name + ' (all data with histogram overlay)'
+
+    elif dataset_name == "1d_gauss":
+        num_clusters = 3
+        df = generate_clustering_1d_gauss_anomalies(random_seed=random_seed,
+                                                labelled_percent=0.1,
+                                                cluster_params=[
+                                                    (0, 1), (50, 3), (100, 6)
+                                                    ],
+                                                samples_per_cluster=10000,
+                                                include_anomaly_cluster=True,
+                                                )
+        plot_title = dataset_name + ' (all data with histogram overlay)'
+
+    elif dataset_name == "2d_gauss":
+        num_clusters=5
+        
+        # Define cluster standard deviations
+        same_density = False
+        if same_density:
+            std_dev = 0.6
+        else:
+            # Set different std deviations for each component
+            std_dev = [1.5, 0.8, 1.2, 3, 0.4][:num_clusters]
+            
+        df = generate_clustering_2d_gauss_data(n_samples=10000,
+                                            n_components=num_clusters,
+                                            num_features=gauss_feature_numbers,
+                                            rand_seed=random_seed,
+                                            same_density=False,
+                                            labelled_fraction=0.01,
+                                            add_anomaly_cluster=True,
+                                            std_dev=std_dev,
+                                            )
+        plot_title = dataset_name + ' (all data)'
+
+    else:
+        df, num_clusters = prepare_dataset(dataset_name, 
+                                                    label_column='class', 
+                                                    percent_labelled=0.05
+                                                    )
+        plot_title = dataset_name + ' (all data)'
+        
+    return df, num_clusters, plot_title
