@@ -4,6 +4,7 @@
 import os
 import time
 import pandas as pd
+from IPython.display import display
 
 # Clustering methods
 from clustering_methods import (
@@ -170,10 +171,10 @@ runtime_df = pd.DataFrame([
     for algo, rt in runtimes.items()
 ])
 
-# Print the runtime and DataFrame
+# Print the runtime and save and display the DataFrame
 print("\nRuntimes (in seconds):")
 save_df(runtime_df, "runtime", dataset_name, results_folder)
-runtime_df
+display(runtime_df)
 
 # %%
 # ---------------------------- Metric Evaluation ------------------------
@@ -238,11 +239,9 @@ df_metrics = evaluate_clustering_metrics(df=df, metrics_dict=all_metrics,
                                          feature_columns=feature_columns,  
 )
 
-# save the metrics DataFrame
+# save the metrics DataFrame and display
 save_df(df_metrics, "clustering_metrics", dataset_name, results_folder=results_folder)
-
-# show the metrics DataFrame
-df_metrics
+display(df_metrics)
 
 # %%
 
