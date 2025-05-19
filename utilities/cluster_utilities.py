@@ -232,7 +232,12 @@ def load_dataset(dataset_name, random_seed = 365): #np.random.randint(0, 10000)
         plot_title = dataset_name + ' (all data with histogram overlay)'
 
     elif dataset_name == "2d_gauss":
-        num_clusters=5
+        num_samples = 10000
+        num_clusters = 5
+        gauss_feature_numbers=2
+        labelled_fraction = 0.01
+        same_density = False
+        add_anomaly_cluster = False
         
         # Define cluster standard deviations
         same_density = False
@@ -242,13 +247,13 @@ def load_dataset(dataset_name, random_seed = 365): #np.random.randint(0, 10000)
             # Set different std deviations for each component
             std_dev = [1.5, 0.8, 1.2, 3, 0.4][:num_clusters]
             
-        df = generate_clustering_2d_gauss_data(n_samples=10000,
+        df = generate_clustering_2d_gauss_data(n_samples=num_samples,
                                             n_components=num_clusters,
                                             num_features=gauss_feature_numbers,
                                             rand_seed=random_seed,
-                                            same_density=False,
-                                            labelled_fraction=0.01,
-                                            add_anomaly_cluster=True,
+                                            same_density=same_density,
+                                            labelled_fraction=labelled_fraction,
+                                            add_anomaly_cluster=add_anomaly_cluster,
                                             std_dev=std_dev,
                                             )
         plot_title = dataset_name + ' (all data)'

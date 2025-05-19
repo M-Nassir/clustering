@@ -36,16 +36,9 @@ from utilities.evaluation_metrics import (
 results_folder = 'results'
 os.makedirs(results_folder, exist_ok=True)
 
-# Define dataset name, note all features must be numeric
-dataset_name = "Seed_Data_class.csv"  # Options: "1d_simple", 
-#                              "1d_gauss", 
-#                              "2d_gauss", 
-#                              "Seed_Data_class.csv" 
-
 num_clusters = None  
 plot_title = None
 random_seed = 365 #np.random.randint(0, 10000)
-gauss_feature_numbers = 2 
 
 # %% read in dataset
 dataset_list = [
@@ -54,6 +47,8 @@ dataset_list = [
     "2d_gauss", 
     "Seed_Data_class.csv"
 ]
+
+dataset_name = dataset_list[2] 
 
 # Load dataset
 #np.random.randint(0, 10000)
@@ -242,7 +237,5 @@ df_metrics = evaluate_clustering_metrics(df=df, metrics_dict=all_metrics,
 # save the metrics DataFrame and display
 save_df(df_metrics, "clustering_metrics", dataset_name, results_folder=results_folder)
 display(df_metrics)
-
-# %%
 
 
