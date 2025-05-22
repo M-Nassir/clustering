@@ -1,11 +1,6 @@
 import numpy as np
 from perception_nassir import Perception
 
-# TODO: finish predict method using scores with respect to clusters?
-# TODO: maybe put check which clusters are tightest after every round? or will it be too slow
-# without much improvement?
-# TODO: a point can belong to multiple clusters
-
 class NovelClustering:
     """
     A semi-supervised clustering algorithm based on anomaly detection.
@@ -15,8 +10,16 @@ class NovelClustering:
     for potential inclusion in clusters over multiple refinement rounds.
     """
 
-    def __init__(self, max_iterations=1000):
-        self.max_n_iterations = max_iterations # in case of rare oscillations resulting in infinite loop
+    def __init__(self, max_n_iterations=1000):
+        """
+        Initialise the clustering model.
+
+        Parameters
+        ----------
+        max_n_iterations : int, optional
+            Maximum number of refinement iterations to avoid rare oscillations (default: 1000).
+        """
+        self.max_n_iterations = max_n_iterations  # in case of rare oscillations resulting in infinite loop
         self.clf_models = {}                   # Perception models for each cluster
         self.cluster_fit_scores_ = {}          # scores of each cluster on the entire dataset
         self.data_dimensionality_ = None       # dimensionality of the input data
@@ -24,6 +27,19 @@ class NovelClustering:
         self.mse_of_clusters_ = None           # MSE of clusters; used for ordering
 
     def _validate_input_array(self, input_array):
+        """
+        Validate the structure and content of the input array.
+
+        Parameters
+        ----------
+        input_array : np.ndarray
+            Input array with shape (n_samples, n_features + 1). Last column must be integer labels.
+
+        Raises
+        ------
+        AssertionError
+            If the input does not satisfy format or content constraints.
+        """
         assert isinstance(input_array, np.ndarray), "Input must be a NumPy array"
         assert input_array.ndim == 2, "Input must be 2D"
         assert input_array.shape[1] >= 2, "Must have features and label column"
@@ -33,21 +49,55 @@ class NovelClustering:
         assert np.all(labels >= -1), "Labels must be ≥ -1"
 
     def _split_features_labels(self, input_array):
+        """
+        Split the input array into features and labels.
+
+        Parameters
+        ----------
+        input_array : np.ndarray
+            Input array with shape (n_samples, n_features + 1).
+
+        Returns
+        -------
+        X : np.ndarray
+            Feature matrix.
+        y : np.ndarray
+            Integer labels.
+        """
         self._validate_input_array(input_array)
         X = input_array[:, :-1]
         y = input_array[:, -1].astype(int)
         return X, y
 
-    def _cluster_mse_scores(self, X, y_live, cluster_labels):
+    def _cluster_mse_scores(self, X, y_current_labels, cluster_labels):
+        """
+        Compute MSE scores for clusters and return clusters sorted by compactness.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Feature matrix.
+        y_current_labels : np.ndarray
+            Current labels including -1 for unlabelled.
+        cluster_labels : np.ndarray
+            Unique cluster labels.
+
+        Returns
+        -------
+        sorted_clusters : np.ndarray
+            Cluster labels sorted by increasing MSE.
+        sorted_mse : np.ndarray
+            Corresponding MSE values.
+        """
         mse_array = np.full(len(cluster_labels), np.inf)
         label_to_index = {label: i for i, label in enumerate(cluster_labels)}
 
-        for label in np.unique(y_live):
+        for label in np.unique(y_current_labels):
             if label == -1:
                 continue
 
             idx = label_to_index[label]
-            cluster_points = X[y_live == label]
+            cluster_points = X[y_current_labels == label]
 
             if cluster_points.shape[0] > 0:
                 cluster_median = np.median(cluster_points, axis=0)
@@ -61,7 +111,7 @@ class NovelClustering:
 
         return sorted_clusters, sorted_mse
 
-    def _fit_and_expand_clusters(self, X, y_live):
+    def _fit_and_expand_clusters(self, X, y_current_labels):
         """
         Iteratively refine clusters based on seeded labels:
         - Fit Perception to each cluster
@@ -73,7 +123,7 @@ class NovelClustering:
         ----------
         X : np.ndarray
             Feature matrix.
-        y_live : np.ndarray
+        y_current_labels : np.ndarray
             Current cluster assignments (including -1 for unlabelled/anomalous).
 
         Returns
@@ -83,23 +133,23 @@ class NovelClustering:
         """
         def fit_and_eject_anomalies(cluster_label):
             """Fit model on cluster and eject detected outliers."""
-            cluster_indices = np.where(y_live == cluster_label)[0]
+            cluster_indices = np.where(y_current_labels == cluster_label)[0]
             if len(cluster_indices) == 0:
                 return None, False
 
             X_cluster = X[cluster_indices]
             clf = Perception()
             clf.fit_predict(X_cluster)  
-            labels_pred = clf.labels_ # 0 = inlier, 1 = anomaly
+            labels_pred = clf.labels_  # 0 = inlier, 1 = anomaly
 
             anomalies_found = np.any(labels_pred != 0)
-            # Update y_live in place
-            y_live[cluster_indices] = np.where(labels_pred == 0, cluster_label, -1)
+            # Update y_current_labels in place
+            y_current_labels[cluster_indices] = np.where(labels_pred == 0, cluster_label, -1)
             return clf, anomalies_found
 
         def claim_anomalies(cluster_label, clf):
             """Try to reassign anomalies to this cluster using fitted model."""
-            anomaly_indices = np.where(y_live == -1)[0]
+            anomaly_indices = np.where(y_current_labels == -1)[0]
             if len(anomaly_indices) == 0 or clf is None:
                 return False
 
@@ -108,7 +158,7 @@ class NovelClustering:
             accepted = (labels_pred == 0)
 
             if np.any(accepted):
-                y_live[anomaly_indices] = np.where(accepted, cluster_label, -1)
+                y_current_labels[anomaly_indices] = np.where(accepted, cluster_label, -1)
                 return True
             return False
     
@@ -121,24 +171,23 @@ class NovelClustering:
 
             for cluster_label in self.ordered_cluster_labels_:
                 if cluster_label == -1:
-                    continue # Skip anomalies cluster
+                    continue  # Skip anomalies cluster
 
                 clf, changed = fit_and_eject_anomalies(cluster_label)
                 if changed:
-                    # points were ejected, so cluster has changed
-                    cluster_changed = True 
+                    cluster_changed = True  # points were ejected, so cluster has changed
 
                     # Refit only on inliers (post-ejection)
-                    updated_indices = np.where(y_live == cluster_label)[0]
+                    updated_indices = np.where(y_current_labels == cluster_label)[0]
                     if len(updated_indices) > 0:
                         clf.fit(X[updated_indices])
 
                 if claim_anomalies(cluster_label, clf):
-                    cluster_changed = True # points were claimed, so cluster has changed
+                    cluster_changed = True  # points were claimed, so cluster has changed
 
-        return y_live
+        return y_current_labels
       
-    def _final_claim_anomalies(self, X, y_live):
+    def _final_claim_anomalies(self, X, y_current_labels):
         """
         Final pass where clusters try to claim remaining anomalies.
 
@@ -146,7 +195,7 @@ class NovelClustering:
         ----------
         X : np.ndarray
             Feature matrix.
-        y_live : np.ndarray
+        y_current_labels : np.ndarray
             Current cluster labels (including -1 for anomalies).
 
         Returns
@@ -154,33 +203,37 @@ class NovelClustering:
         np.ndarray
             Updated cluster labels after claiming anomalies.
         """
-        anomalies_mask = (y_live == -1)
+        anomalies_mask = (y_current_labels == -1)
         if not np.any(anomalies_mask):
-            return y_live  # No anomalies to process
+            return y_current_labels  # No anomalies to process
 
-        anomaly_points = X[anomalies_mask]
+        anomaly_idx = np.where(anomalies_mask)[0]
+        anomaly_points = X[anomaly_idx]
 
         for cluster_label in self.ordered_cluster_labels_:
             if cluster_label == -1:
                 continue
 
-            X_sub = X[y_live == cluster_label]
+            X_sub = X[y_current_labels == cluster_label]
             if X_sub.shape[0] <= 2:
-                continue
+                continue  # Skip small clusters
 
             clf = Perception()
             clf.fit(X_sub)
             clf.predict(anomaly_points)
 
-            y_live[anomalies_mask] = np.where(
-                clf.labels_ == 0,
-                cluster_label,
-                y_live[anomalies_mask]
-            )
+            accepted = clf.labels_ == 0
+            y_current_labels[anomaly_idx[accepted]] = cluster_label
 
-        return y_live
+            # Early stopping: update mask and break if all anomalies are claimed
+            anomaly_idx = anomaly_idx[~accepted]
+            anomaly_points = anomaly_points[~accepted]
+            if len(anomaly_idx) == 0:
+                break
 
-    def _fit_final_classifiers(self, X, y_live):
+        return y_current_labels
+
+    def _fit_final_classifiers(self, X, y_current_labels):
         """
         Fit a final Perception classifier for each cluster (excluding anomalies),
         and store both the model and its scores on the entire dataset.
@@ -189,14 +242,14 @@ class NovelClustering:
         ----------
         X : np.ndarray
             The full feature matrix.
-        y_live : np.ndarray
+        y_current_labels : np.ndarray
             The final cluster label assignments.
         """
         for cluster_label in self.ordered_cluster_labels_:
             if cluster_label == -1:
                 continue  # Skip anomalies
 
-            cluster_mask = (y_live == cluster_label)
+            cluster_mask = (y_current_labels == cluster_label)
             X_sub = X[cluster_mask]
 
             if X_sub.shape[0] == 0:
@@ -209,8 +262,7 @@ class NovelClustering:
             clf_m.predict(X)
             self.cluster_fit_scores_[cluster_label] = clf_m.scores_
 
-
-    def fit(self, input_array):
+    def fit(self, input_array: np.ndarray) -> np.ndarray:
         """
         Fit the clustering model to the provided semi-supervised dataset.
 
@@ -226,23 +278,23 @@ class NovelClustering:
             Final cluster assignments after iterative refinement.
         """
         # Validate and extract features and labels from the input array
-        X, y_live = self._split_features_labels(input_array)
+        X, y_current_labels = self._split_features_labels(input_array)
 
         # Store feature dimensionality for later validation during prediction
         self.data_dimensionality_ = X.shape[1]
 
         # Cluster ordering by compactness (MSE from median)
-        unique_cluster_labels = np.unique(y_live)
-        self.ordered_cluster_labels_, self.mse_of_clusters_ = self._cluster_mse_scores(X, y_live, unique_cluster_labels)
+        unique_cluster_labels = np.unique(y_current_labels)
+        self.ordered_cluster_labels_, self.mse_of_clusters_ = self._cluster_mse_scores(X, y_current_labels, unique_cluster_labels)
 
-        y_live = self._fit_and_expand_clusters(X, y_live)
-        y_live = self._final_claim_anomalies(X, y_live)
-        self._fit_final_classifiers(X, y_live)
-        return y_live
+        y_current_labels = self._fit_and_expand_clusters(X, y_current_labels)
+        y_current_labels = self._final_claim_anomalies(X, y_current_labels)
+        self._fit_final_classifiers(X, y_current_labels)
+        return y_current_labels
 
     def predict(self, X):
         """
-        Predict cluster assignments for new data points based on trained Cluster models.
+        Predict cluster assignments for new data points based on trained cluster models.
 
         For each point in `X`, the method computes its anomaly score under each 
         trained cluster model. The point is assigned to the cluster where it 
@@ -283,5 +335,6 @@ class NovelClustering:
 
         predicted_labels[min_scores > 0] = -1
         return predicted_labels, min_scores
+
 
 
