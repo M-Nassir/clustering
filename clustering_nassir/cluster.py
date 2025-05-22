@@ -1,248 +1,337 @@
 import numpy as np
-import pandas as pd
 from perception_nassir import Perception
 
-# TODO: fit/predict documentation
-# TODO: finish predict method using scores with respect to clusters
+# TODO: finish predict method using scores with respect to clusters?
 # TODO: maybe put check which clusters are tightest after every round? or will it be too slow
 # without much improvement?
-
+# TODO: a point can belong to multiple clusters
 
 class NovelClustering:
-    """Clustering algorithm.
+    """
+    A semi-supervised clustering algorithm based on anomaly detection.
 
-    Semi-supervised clustering algorithm that uses Nassir's anomaly detection 
-    algorithm at its core to eject or claim anomalies to grow clusters. 
+    This method uses Nassir's anomaly detection method to iteratively refine clusters.
+    Anomalous points are ejected from clusters and unlabelled points are tested 
+    for potential inclusion in clusters over multiple refinement rounds.
     """
 
-    def __init__(self):
-        """Initialise Constructor for Nassir's clustering."""
+    def __init__(self, max_iterations=1000):
+        self.max_n_iterations = max_iterations # in case of rare oscillations resulting in infinite loop
+        self.clf_models = {}                   # Perception models for each cluster
+        self.cluster_fit_scores_ = {}          # scores of each cluster on the entire dataset
+        self.data_dimensionality_ = None       # dimensionality of the input data
+        self.ordered_cluster_labels_ = None    # ordered cluster labels based on compactness
+        self.mse_of_clusters_ = None           # MSE of clusters; used for ordering
 
-    def fit(self, input_array):
-        """Fit to data in order to cluster."""
-        # ------------------------------------------------------------------
-        # carry out iput data checks and setup
-        # ------------------------------------------------------------------
+    def _validate_input_array(self, input_array):
+        assert isinstance(input_array, np.ndarray), "Input must be a NumPy array"
+        assert input_array.ndim == 2, "Input must be 2D"
+        assert input_array.shape[1] >= 2, "Must have features and label column"
+        labels = input_array[:, -1]
+        assert np.issubdtype(labels.dtype, np.number), "Label column must be numeric"
+        assert np.all(labels.astype(int) == labels), "Labels must be integers"
+        assert np.all(labels >= -1), "Labels must be ≥ -1"
 
-        assert type(input_array) == np.ndarray, \
-            "input_array must by a numpy ndarray"
+    def _split_features_labels(self, input_array):
+        self._validate_input_array(input_array)
+        X = input_array[:, :-1]
+        y = input_array[:, -1].astype(int)
+        return X, y
 
-        assert (input_array.ndim and input_array.size) > 0, \
-            "input_array must not be empty or contain only 'None' "
+    def _cluster_mse_scores(self, X, y_live, cluster_labels):
+        mse_array = np.full(len(cluster_labels), np.inf)
+        label_to_index = {label: i for i, label in enumerate(cluster_labels)}
 
-        assert input_array.shape[1] >= 2,\
-            "input array must have at least one feature, and one label column"
-
-        assert np.all(np.mod(input_array[:, -1], 1) == 0), \
-            "all input array labels (last column) must be integers"
-
-        # copy the input arrays; last column is semi-supervised labels
-        X = input_array[:, :-1].copy()
-        y = input_array[:, -1].astype(int).copy()
-
-        # extra checks, probably redundant
-        assert (X.size and X.ndim) > 0, "data must be non-empty"
-        assert (y.size and y.ndim) > 0, "cluster labels must be non-empty"
-
-        # check label numbers are >= -1
-        assert (y >= -1).all(), "All label values must be >= -1"
-
-        # store the data dimensionality for cluster prediction stage
-        self.data_dimensionality_ = X.shape[1]
-
-        # store the perception classifier models
-        self.clf_models = {}
-
-        # dictionary to hold scores of every observation w.r.t. each cluster
-        self.cluster_fit_scores_ = {}
-
-        # get and sort the unique cluster labels
-        self.cluster_numbers_ = np.sort(np.unique(y))
-
-        # set maximum number of iterations
-        self.max_n_iterations_ = 1000
-
-        # ------------------------------------------------------------------
-        # sort cluster number order by minimum sum of squared error
-        # ------------------------------------------------------------------
-
-        # for each cluster compute the MSE from the median. Clusters will be
-        # able to claim anomalies beginning with the tightest clusters.
-        cluster_mse = []
-        for cn in self.cluster_numbers_:
-            if cn == -1:
-                mse = -np.inf
-            else:
-                cluster_data = X[np.where(y == cn)]
-                cluster_median = np.median(cluster_data, axis=0).reshape(1, -1)
-
-                mse = np.square(cluster_data - cluster_median).mean()
-
-            cluster_mse.append(mse)
-
-        self.mse_of_clusters_ = np.array(cluster_mse)
-
-        # sort the cluster order by MSE ascending
-        self.cluster_numbers_ = self.cluster_numbers_[
-            self.mse_of_clusters_.argsort()]
-
-        # ------------------------------------------------------------------
-        # cluster the data
-        # ------------------------------------------------------------------
-
-        # set counter for tracking validation
-        itr = 0
-
-        # do loop until no point assignment changes occur
-        cco = True
-        while cco is True and itr < self.max_n_iterations_:
-
-            # testing tracking; remove in future
-            itr = itr + 1
-            # print(itr)
-
-            # this will be reset to true if a cluster assignment change occurs
-            cco = False
-
-            for i in self.cluster_numbers_:
-
-                # if the index is for the anomaly label then skip
-                # don't do clustering on anomaly group
-                if i == -1:
-                    continue
-
-                # get the cluster data and indices
-                X_sub = X[y == i]
-                ind = np.where(y == i)
-
-                # fit the classifier to the cluster data only
-                clf = Perception()
-                clf.fit_predict(X_sub)
-
-                # anomalies -> -1
-                y[ind] = np.where(clf.labels_ == 0, i, -1)
-
-                # if anomalies have been ejected, modify the flag
-                if np.any(clf.labels_ != 0):
-                    cco = True
-
-                    # re-fit clf to group without anomalies
-                    clf.fit(X[y == i])
-
-                # expand cluster only if it has >= 2 members
-                if (X[y == i].shape[0] >= 2) and \
-                        ((X[y == i].ndim and X[y == i].size) > 0):
-
-                    # check anomalies for group membership
-                    # -------------------------------------
-                    anomaly_points = X[y == -1]
-
-                    # check anomaly group is non-empty
-                    if (anomaly_points.size and anomaly_points.ndim) > 0:
-
-                        # get anomaly indices
-                        ind0 = np.where(y == -1)
-
-                        # predict anomalies w.r.t. the current group
-                        clf.predict(anomaly_points)
-
-                        # modify labels of any points belonging to group
-                        y[ind0] = np.where(clf.labels_ == 0, i, -1)
-
-                        # if anomalies predicted to belong to group
-                        if np.any(clf.labels_ == 0):
-                            cco = True
-
-        # finally let each cluster have chance to claim anomalies in case
-        # they have changed after temp anomaly assignment changes.
-        for i in self.cluster_numbers_:
-
-            if i == -1:
+        for label in np.unique(y_live):
+            if label == -1:
                 continue
 
-            # get the cluster data points only
-            X_sub = X[y == i]
+            idx = label_to_index[label]
+            cluster_points = X[y_live == label]
 
-            # get all the remaining anomalous points
-            apl = X[y == -1]
-            ind_anomalous_left = np.where(y == -1)
+            if cluster_points.shape[0] > 0:
+                cluster_median = np.median(cluster_points, axis=0)
+                mse = np.mean(np.square(cluster_points - cluster_median))
+                mse_array[idx] = mse
 
-            # check if there are any left over anomalies
-            if (apl.size and apl.ndim) <= 0:
-                break
+        # Sort clusters by increasing MSE
+        sort_indices = np.argsort(mse_array)
+        sorted_clusters = cluster_labels[sort_indices]
+        sorted_mse = mse_array[sort_indices]
 
-            # check if group is non-empty and has more than 2 elements
-            if (X_sub.shape[0] >= 2) and (X_sub.size and X_sub.ndim) > 0:
+        return sorted_clusters, sorted_mse
 
-                clf = Perception()
-                clf.fit(X_sub)
+    def _fit_and_expand_clusters(self, X, y_live):
+        """
+        Iteratively refine clusters based on seeded labels:
+        - Fit Perception to each cluster
+        - Eject anomalies
+        - Re-fit if necessary
+        - Try to claim nearby anomalies
 
-                clf.predict(apl)
-
-                # change label if it belongs to cluster, otherwise leave
-                y[ind_anomalous_left] = np.where(clf.labels_ == 0, i, -1)
-
-        # ------------------------------------------------------------------
-        # save classifiers and get the scores by each cluster for every point
-        # ------------------------------------------------------------------
-
-        # calculate the centroids (mean or median) of each cluster. Note that
-        # anomalies will not form part of the grouping.
-        for i in self.cluster_numbers_:
-
-            if i != -1:
-                clf_m = Perception()
-                clf_m.fit(X[y == i])
-
-                # print(clf_m.multi_d_medians_.sum())
-
-                # save the classifier model for the cluster
-                self.clf_models[i] = clf_m
-
-                clf_m.predict(X)
-
-                # save the cluster scores for each model
-                self.cluster_fit_scores_[i] = clf_m.scores_
-
-        # return only the cluster labels for each example
-        return y
-
-    def predict(self, X):
-        """ Predict cluster labels and associated score over new data.
-
-        Input
-        -------
-        Array of values of same dimension as data upon which classifier has
-        been fitted to.
+        Parameters
+        ----------
+        X : np.ndarray
+            Feature matrix.
+        y_live : np.ndarray
+            Current cluster assignments (including -1 for unlabelled/anomalous).
 
         Returns
         -------
-        Array of cluster numbers/anomaly labels for each observation.
-        Array of cluster association score/anomaly score for each observation
+        np.ndarray
+            Updated labels after iterative refinement.
         """
-        assert type(X) == np.ndarray, "input_array must by a numpy array"
+        def fit_and_eject_anomalies(cluster_label):
+            """Fit model on cluster and eject detected outliers."""
+            cluster_indices = np.where(y_live == cluster_label)[0]
+            if len(cluster_indices) == 0:
+                return None, False
 
-        assert X.shape[1] == self.data_dimensionality_, \
-            "input array must match dimensionality of data fit stage"
+            X_cluster = X[cluster_indices]
+            clf = Perception()
+            clf.fit_predict(X_cluster)  
+            labels_pred = clf.labels_ # 0 = inlier, 1 = anomaly
 
-        assert (X.size and X.ndim) > 0, "data must be non-empty"
+            anomalies_found = np.any(labels_pred != 0)
+            # Update y_live in place
+            y_live[cluster_indices] = np.where(labels_pred == 0, cluster_label, -1)
+            return clf, anomalies_found
 
-        # fit and predict
-        self.predict_model_scores_ = {}
+        def claim_anomalies(cluster_label, clf):
+            """Try to reassign anomalies to this cluster using fitted model."""
+            anomaly_indices = np.where(y_live == -1)[0]
+            if len(anomaly_indices) == 0 or clf is None:
+                return False
 
-        for cluster_number, clf_model in self.clf_models.items():
-            clf_model.predict(X)
-            self.predict_model_scores_[cluster_number] = clf_model.scores_
+            X_anomalies = X[anomaly_indices]
+            labels_pred = clf.predict(X_anomalies)
+            accepted = (labels_pred == 0)
 
-        df = pd.DataFrame(self.predict_model_scores_)
+            if np.any(accepted):
+                y_live[anomaly_indices] = np.where(accepted, cluster_label, -1)
+                return True
+            return False
+    
+        itr = 0                 # Iteration counter
+        cluster_changed = True  # Cluster change occurred flag
 
-        # get the column number with minimum
-        self.min_value_cluster_labels_ = df.idxmin(axis=1).values
-        self.min_predict_score_ = df.min(axis=1).values
+        while cluster_changed and itr < self.max_n_iterations:
+            cluster_changed = False
+            itr += 1
 
-        # replace all positive scores with
-        self.min_value_cluster_labels_[
-            np.where(self.min_predict_score_ > 0)] = -1
+            for cluster_label in self.ordered_cluster_labels_:
+                if cluster_label == -1:
+                    continue # Skip anomalies cluster
 
-        # return the dynamic cluster labels
-        return self.min_value_cluster_labels_
+                clf, changed = fit_and_eject_anomalies(cluster_label)
+                if changed:
+                    # points were ejected, so cluster has changed
+                    cluster_changed = True 
+
+                    # Refit only on inliers (post-ejection)
+                    updated_indices = np.where(y_live == cluster_label)[0]
+                    if len(updated_indices) > 0:
+                        clf.fit(X[updated_indices])
+
+                if claim_anomalies(cluster_label, clf):
+                    cluster_changed = True # points were claimed, so cluster has changed
+
+        return y_live
+    
+        # while cluster_changed and itr < self.max_n_iterations:
+        #     itr += 1
+        #     cluster_changed = False
+
+        #     for cluster_label in self.ordered_cluster_labels_:
+        #         if cluster_label == -1:
+        #             continue  # Skip anomalies cluster
+
+        #         # get points in the current cluster
+        #         cluster_mask = (y_live == cluster_label)
+        #         X_sub = X[cluster_mask]
+
+        #         # If the cluster is empty, skip it
+        #         if X_sub.shape[0] == 0:
+        #             continue  
+
+        #         # Fit and predict Perception model on the current cluster
+        #         clf = Perception()
+        #         clf.fit_predict(X_sub)
+        #         labels_pred = clf.labels_
+
+        #         # Eject detected anomalies from this cluster
+        #         cluster_indices = np.where(cluster_mask)[0]
+        #         y_live[cluster_indices] = np.where(labels_pred == 0, cluster_label, -1)
+
+        #         # If the cluster has changed after ejecting anomalies, then re-fit the model
+        #         if np.any(labels_pred != 0):
+        #             cluster_changed = True # points were ejected, so cluster has changed
+        #             updated_mask = (y_live == cluster_label)
+        #             if np.sum(updated_mask) > 0:
+        #                 clf.fit(X[updated_mask])
+
+        #         # Try to claim anomalies
+        #         updated_mask = (y_live == cluster_label)
+        #         if np.sum(updated_mask) >= 2: # Ensure at least 2 points in the cluster
+        #             anomaly_mask = (y_live == -1)
+        #             anomaly_points = X[anomaly_mask]
+
+        #             if anomaly_points.shape[0] > 0:
+        #                 clf.predict(anomaly_points)
+        #                 updated_preds_on_anomaly_points = clf.labels_
+
+        #                 anomaly_indices = np.where(anomaly_mask)[0]
+        #                 y_live[anomaly_indices] = np.where(updated_preds_on_anomaly_points == 0, cluster_label, -1)
+
+        #                 if np.any(updated_preds_on_anomaly_points == 0):
+        #                     cluster_changed = True # points were claimed, so cluster has changed
+
+        
+
+    def _final_claim_anomalies(self, X, y_live):
+        """
+        Final pass where clusters try to claim remaining anomalies.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Feature matrix.
+        y_live : np.ndarray
+            Current cluster labels (including -1 for anomalies).
+
+        Returns
+        -------
+        np.ndarray
+            Updated cluster labels after claiming anomalies.
+        """
+        anomalies_mask = (y_live == -1)
+        if not np.any(anomalies_mask):
+            return y_live  # No anomalies to process
+
+        anomaly_points = X[anomalies_mask]
+
+        for cluster_label in self.ordered_cluster_labels_:
+            if cluster_label == -1:
+                continue
+
+            X_sub = X[y_live == cluster_label]
+            if X_sub.shape[0] <= 2:
+                continue
+
+            clf = Perception()
+            clf.fit(X_sub)
+            clf.predict(anomaly_points)
+
+            y_live[anomalies_mask] = np.where(
+                clf.labels_ == 0,
+                cluster_label,
+                y_live[anomalies_mask]
+            )
+
+        return y_live
+
+    def _fit_final_classifiers(self, X, y_live):
+        """
+        Fit a final Perception classifier for each cluster (excluding anomalies),
+        and store both the model and its scores on the entire dataset.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            The full feature matrix.
+        y_live : np.ndarray
+            The final cluster label assignments.
+        """
+        for cluster_label in self.ordered_cluster_labels_:
+            if cluster_label == -1:
+                continue  # Skip anomalies
+
+            cluster_mask = (y_live == cluster_label)
+            X_sub = X[cluster_mask]
+
+            if X_sub.shape[0] == 0:
+                continue  # Skip empty clusters
+
+            clf_m = Perception()
+            clf_m.fit(X_sub)
+            self.clf_models[cluster_label] = clf_m
+            
+            clf_m.predict(X)
+            self.cluster_fit_scores_[cluster_label] = clf_m.scores_
+
+
+    def fit(self, input_array):
+        """
+        Fit the clustering model to the provided semi-supervised dataset.
+
+        Parameters
+        ----------
+        input_array : np.ndarray
+            A 2D NumPy array where the last column contains integer labels.
+            Label `-1` denotes unlabelled (anomalous) points, others are initial cluster labels.
+
+        Returns
+        -------
+        np.ndarray
+            Final cluster assignments after iterative refinement.
+        """
+        # Validate and extract features and labels from the input array
+        X, y_live = self._split_features_labels(input_array)
+
+        # Store feature dimensionality for later validation during prediction
+        self.data_dimensionality_ = X.shape[1]
+
+        # Cluster ordering by compactness (MSE from median)
+        unique_cluster_labels = np.unique(y_live)
+        self.ordered_cluster_labels_, self.mse_of_clusters_ = self._cluster_mse_scores(X, y_live, unique_cluster_labels)
+
+        y_live = self._fit_and_expand_clusters(X, y_live)
+        y_live = self._final_claim_anomalies(X, y_live)
+        self._fit_final_classifiers(X, y_live)
+        return y_live
+
+    def predict(self, X):
+        """
+        Predict cluster assignments for new data points based on trained Cluster models.
+
+        For each point in `X`, the method computes its anomaly score under each 
+        trained cluster model. The point is assigned to the cluster where it 
+        receives the lowest score. If the lowest score is above zero, the point 
+        is considered an anomaly and assigned label `-1`.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            A 2D NumPy array of shape (n_samples, n_features) representing the input data.
+            Must have the same number of features as the data used during `fit()`.
+
+        Returns
+        -------
+        predicted_labels : np.ndarray
+            A 1D array of length n_samples containing predicted cluster labels. 
+            Labels are integers corresponding to cluster IDs, or -1 for anomalies.
+
+        min_scores : np.ndarray
+            A 1D array of length n_samples containing the minimum anomaly score
+            for each point across all cluster models.
+
+        Raises
+        ------
+        AssertionError
+            If input is not a 2D NumPy array with the correct dimensionality.
+        """
+        assert isinstance(X, np.ndarray), "Input must be a NumPy array"
+        assert X.ndim == 2, "Input must be 2D"
+        assert X.shape[1] == self.data_dimensionality_, "Input dimension mismatch"
+
+        cluster_ids = list(self.clf_models.keys())
+        scores_matrix = np.stack([self.clf_models[cid].predict(X) for cid in cluster_ids], axis=1)
+
+        min_score_indices = np.argmin(scores_matrix, axis=1)
+        min_scores = scores_matrix[np.arange(X.shape[0]), min_score_indices]
+        predicted_labels = np.array([cluster_ids[i] for i in min_score_indices])
+
+        predicted_labels[min_scores > 0] = -1
+        return predicted_labels, min_scores
+
+
