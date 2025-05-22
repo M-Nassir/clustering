@@ -160,9 +160,9 @@ cython_debug/
 #.idea/
 
 deprecated/
-data/image
-data/realworld
-data/tabular
-data/text
+data/raw
+data/processed
 todo.md
 dcc/
+notebooks/results
+results/

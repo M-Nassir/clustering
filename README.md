@@ -4,7 +4,7 @@ https://arxiv.org/abs/2306.06974
 
 The algorithm takes as input a matrix of numerical features, where each row represents an example and each column a feature. An additional column must contain partial labels (seeds), which are externally provided. Labels must be integers, with -1 reserved for unlabelled examples.
 
-It is recommended to provide at least 10 labelled examples per class to ensure effective clustering.
+It is recommended to provide at least 15 labelled examples per class as a rule of thumb to ensure effective clustering.
 
 At its core, the algorithm uses the Perception anomaly detection algorithm. Starting from the initial labelled seeds, it iteratively adds or ejects points from each cluster based on their consistency with the group. This process continues until the clusters stabilise.
 
