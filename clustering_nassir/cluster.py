@@ -137,57 +137,7 @@ class NovelClustering:
                     cluster_changed = True # points were claimed, so cluster has changed
 
         return y_live
-    
-        # while cluster_changed and itr < self.max_n_iterations:
-        #     itr += 1
-        #     cluster_changed = False
-
-        #     for cluster_label in self.ordered_cluster_labels_:
-        #         if cluster_label == -1:
-        #             continue  # Skip anomalies cluster
-
-        #         # get points in the current cluster
-        #         cluster_mask = (y_live == cluster_label)
-        #         X_sub = X[cluster_mask]
-
-        #         # If the cluster is empty, skip it
-        #         if X_sub.shape[0] == 0:
-        #             continue  
-
-        #         # Fit and predict Perception model on the current cluster
-        #         clf = Perception()
-        #         clf.fit_predict(X_sub)
-        #         labels_pred = clf.labels_
-
-        #         # Eject detected anomalies from this cluster
-        #         cluster_indices = np.where(cluster_mask)[0]
-        #         y_live[cluster_indices] = np.where(labels_pred == 0, cluster_label, -1)
-
-        #         # If the cluster has changed after ejecting anomalies, then re-fit the model
-        #         if np.any(labels_pred != 0):
-        #             cluster_changed = True # points were ejected, so cluster has changed
-        #             updated_mask = (y_live == cluster_label)
-        #             if np.sum(updated_mask) > 0:
-        #                 clf.fit(X[updated_mask])
-
-        #         # Try to claim anomalies
-        #         updated_mask = (y_live == cluster_label)
-        #         if np.sum(updated_mask) >= 2: # Ensure at least 2 points in the cluster
-        #             anomaly_mask = (y_live == -1)
-        #             anomaly_points = X[anomaly_mask]
-
-        #             if anomaly_points.shape[0] > 0:
-        #                 clf.predict(anomaly_points)
-        #                 updated_preds_on_anomaly_points = clf.labels_
-
-        #                 anomaly_indices = np.where(anomaly_mask)[0]
-        #                 y_live[anomaly_indices] = np.where(updated_preds_on_anomaly_points == 0, cluster_label, -1)
-
-        #                 if np.any(updated_preds_on_anomaly_points == 0):
-        #                     cluster_changed = True # points were claimed, so cluster has changed
-
-        
-
+      
     def _final_claim_anomalies(self, X, y_live):
         """
         Final pass where clusters try to claim remaining anomalies.
