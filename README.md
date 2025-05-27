@@ -2,18 +2,18 @@
 This project implements a semi-supervised clustering algorithm, based on the method described in the following publication:
 https://arxiv.org/abs/2306.06974
 
-The algorithm takes as input a matrix of numerical features, where each row represents an example and each column a feature. An additional column must contain partial labels (seeds), which are externally provided. Labels must be integers, with -1 reserved for unlabelled examples.
+The algorithm takes as input a matrix of numerical features, where each row represents an example and each column a feature. An additional column must contain partial labels (seeds), which are externally provided. Labels must be integers >= -1, with -1 reserved for unlabelled examples.
 
-It is recommended to provide at least 15 labelled examples per class as a rule of thumb to ensure effective clustering.
+As a rule of thumb, it is recommended to provide at least 15 labelled examples per known class to ensure effective clustering.
 
-At its core, the algorithm uses the Perception anomaly detection algorithm. Starting from the initial labelled seeds, it iteratively adds or ejects points from each cluster based on their consistency with the group. This process continues until the clusters stabilise.
+At its core, the algorithm uses the Perception anomaly detection algorithm. Starting from the initial labelled seeds, it iteratively adds or ejects points from each cluster based on their consistency with the group. This process continues until the clusters stabilise or a maximum number of iterations is reached.
 
-See the getting_started folder for guides containing examples of clustering methods.
+See the notebooks folder for getting started guides containing examples of using the method, and its performance against other popular clustering methods.
 
 Key features:
 - Supports both one-dimensional and multi-dimensional numerical data.
 - Assigns a cluster label to every input example.
-- Uses the label -1 to indicate anomalous or unassigned examples.
+- Uses the label -1 to indicate anomalous examples.
 - These anomalous examples can be reviewed in follow-up analysis, allowing users to refine labels and re-run clustering in iterative cycles.
 
 ## Installation
@@ -27,6 +27,6 @@ pip install clustering_nassir
 
 ```bash
 pip install clustering_nassir
-from clustering_nassir import novel_clustering
+from clustering_nassir import NovelClustering
 ```
 
