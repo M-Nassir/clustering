@@ -224,7 +224,7 @@ def load_dataset(dataset_name, random_seed = 365): #np.random.randint(0, 10000)
         df = generate_clustering_1d_gauss_anomalies(random_seed=random_seed,
                                                 labelled_percent=0.1,
                                                 cluster_params=[
-                                                    (0, 1), (50, 3), (100, 6)
+                                                    (0, 1), (50, 3), (100, 8)
                                                     ],
                                                 samples_per_cluster=10000,
                                                 include_anomaly_cluster=True,
@@ -233,11 +233,11 @@ def load_dataset(dataset_name, random_seed = 365): #np.random.randint(0, 10000)
 
     elif dataset_name == "2d_gauss":
         num_samples = 10000
-        num_clusters = 5
+        num_clusters = 8
         gauss_feature_numbers=2
         labelled_fraction = 0.01
         same_density = False
-        add_anomaly_cluster = False
+        add_anomaly_cluster = True
         
         # Define cluster standard deviations
         same_density = False
@@ -245,7 +245,7 @@ def load_dataset(dataset_name, random_seed = 365): #np.random.randint(0, 10000)
             std_dev = 0.6
         else:
             # Set different std deviations for each component
-            std_dev = [1.5, 0.8, 1.2, 3, 0.4][:num_clusters]
+            std_dev = [0.6, 2, 0.2, 0.7, 3, 0.4, 0.6, 0.6][:num_clusters]
             
         df = generate_clustering_2d_gauss_data(n_samples=num_samples,
                                             n_components=num_clusters,
