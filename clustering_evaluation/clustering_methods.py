@@ -11,18 +11,24 @@ from clustering_nassir.cluster import NovelClustering
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 from clustpy.deep import DEC
+import time
 
 def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
-
     y_pred = np.asarray(y_pred)
     y_true = np.asarray(y_true)
-    
+
     mask = (y_true != noise_label) & (y_pred != noise_label)
     y_true_masked = y_true[mask]
     y_pred_masked = y_pred[mask]
-    cm = confusion_matrix(y_true_masked, y_pred_masked)
+
+    unique_true = np.unique(y_true_masked)
+    unique_pred = np.unique(y_pred_masked)
+
+    cm = confusion_matrix(y_true_masked, y_pred_masked, labels=unique_true)
+
     row_ind, col_ind = linear_sum_assignment(-cm)
-    label_map = {col: row for row, col in zip(row_ind, col_ind)}
+
+    label_map = {unique_pred[col]: unique_true[row] for row, col in zip(row_ind, col_ind)}
 
     remapped = np.full_like(y_pred, fill_value=noise_label)
     for i, label in enumerate(y_pred):
@@ -66,7 +72,8 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
     # --- Fit the clustering model ---
     clusterer.fit(features)
     cluster_labels = clusterer.labels_ if hasattr(clusterer, 'labels_') else clusterer.predict(features)
-
+    # print(f"Cluster labels before remapping: {np.unique(cluster_labels)}")
+    # print(f"target column unique values: {np.unique(df[target_column])}")
     # --- Remap labels using Hungarian method if requested ---
     if remap_labels and target_column in df.columns:
         labels = remap_clusters_hungarian_with_noise(cluster_labels, df[target_column].to_numpy())
@@ -74,6 +81,7 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
     else:
         labels = cluster_labels
 
+    # print(f"Cluster labels after remapping: {np.unique(labels)}")
     return labels
 
 def kmeans_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
@@ -237,7 +245,7 @@ def novel_clustering(df, feature_columns, seeds='y_live'):
     df['novel_method'] = novel_method.fit(num_d)
     return df
 
-# ----------------------------------- Deep Embedding Clustering (DEC) --------------------------------
+# ----------------------------------- Deep Embedding Clustering (DEC) ------------------------
 def dec_clustering(df, feature_columns, num_clusters=3, 
                    pretrain_epochs=10, clustering_epochs=10, 
                    target_column='y_true', remap_labels=True):
@@ -254,3 +262,21 @@ def dec_clustering(df, feature_columns, num_clusters=3,
         df['DEC'] = dec.labels_
         
     return df
+
+# ----------------------------------- Run and time clusterings -----------------------------------
+def run_and_time_clusterings(df, dataset_name, feature_columns, clustering_configs, clustering_flags):
+    runtimes = {}
+    for name, config in clustering_configs.items():
+        if clustering_flags.get(name, False):
+            print(f"Running {name} with params: {config['params']}")
+            df_c = df.copy()
+            start = time.time()
+            df[name] = config['function'](df_c, feature_columns, **config['params'])[name]
+            runtimes[name] = time.time() - start
+
+    # Convert runtimes dict to DataFrame with dataset name
+    runtime_df = pd.DataFrame([
+        {"Algorithm": algo, "Runtime (s)": rt, "Dataset": dataset_name}
+        for algo, rt in runtimes.items()
+    ])
+    return df, runtime_df
