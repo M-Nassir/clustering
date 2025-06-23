@@ -1,2 +1,4 @@
-# -*- coding: utf-8 -*-
+from .cluster import NovelClustering
+
+__all__ = ['NovelClustering']
 
