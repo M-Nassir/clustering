@@ -12,51 +12,39 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 from clustpy.deep import DEC
 import time
+import logging
+pd.set_option('display.max_rows', None)
 
 def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
     y_pred = np.asarray(y_pred)
     y_true = np.asarray(y_true)
 
-    mask = (y_true != noise_label) & (y_pred != noise_label)
-    y_true_masked = y_true[mask]
-    y_pred_masked = y_pred[mask]
+    # Get all unique labels from both arrays (including noise)
+    unique_true = np.unique(y_true)
+    unique_pred = np.unique(y_pred)
+    
+    # Combine unique labels from both arrays to make sure all are considered
+    all_labels = np.unique(np.concatenate([unique_true, unique_pred]))
 
-    unique_true = np.unique(y_true_masked)
-    unique_pred = np.unique(y_pred_masked)
+    # Compute confusion matrix over all samples, using combined label set
+    cm = confusion_matrix(y_true, y_pred, labels=all_labels)
 
-    cm = confusion_matrix(y_true_masked, y_pred_masked, labels=unique_true)
-
+    # Hungarian algorithm to find best matching - maximize total matches
     row_ind, col_ind = linear_sum_assignment(-cm)
 
-    label_map = {unique_pred[col]: unique_true[row] for row, col in zip(row_ind, col_ind)}
+    # Map predicted labels to true labels (based on matching)
+    label_map = {all_labels[col]: all_labels[row] for row, col in zip(row_ind, col_ind)}
 
+    # Remap predicted labels, keep noise_label if not mapped
     remapped = np.full_like(y_pred, fill_value=noise_label)
     for i, label in enumerate(y_pred):
-        if label != noise_label:
-            remapped[i] = label_map.get(label, noise_label)
+        remapped[i] = label_map.get(label, noise_label)
 
     return remapped
 
 def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true', 
                            remap_labels=False):
-    """
-    Perform clustering using the specified clustering algorithm and optionally remap cluster labels 
-    using the Hungarian algorithm to best match ground-truth labels.
 
-    Parameters:
-    - df (pd.DataFrame): The DataFrame containing the features and optionally ground-truth labels.
-    - feature_columns (list of str): List of column names to be used as features for clustering.
-    - clusterer (sklearn.cluster object or similar): A clustering algorithm with `fit` method.
-    - target_column (str, optional): The ground-truth label column name (default is 'y_true').
-    - remap_labels (bool, optional): If `True`, cluster labels will be remapped using Hungarian method 
-      for best matching to the true labels.
-
-    Returns:
-    - np.ndarray: Array of predicted (possibly remapped) cluster labels.
-
-    Raises:
-    - ValueError: If inputs are invalid.
-    """
     # --- Validate input ---
     if not isinstance(df, pd.DataFrame):
         raise ValueError("Input df must be a pandas DataFrame.")
@@ -72,16 +60,17 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
     # --- Fit the clustering model ---
     clusterer.fit(features)
     cluster_labels = clusterer.labels_ if hasattr(clusterer, 'labels_') else clusterer.predict(features)
-    # print(f"Cluster labels before remapping: {np.unique(cluster_labels)}")
-    # print(f"target column unique values: {np.unique(df[target_column])}")
+    # logging.debug(f"Cluster labels before remapping: {np.unique(cluster_labels)}")
+    # logging.debug(f"target column unique values: {np.unique(df[target_column])}")
+
     # --- Remap labels using Hungarian method if requested ---
     if remap_labels and target_column in df.columns:
         labels = remap_clusters_hungarian_with_noise(cluster_labels, df[target_column].to_numpy())
-        # print(f"Remapped labels: {labels}")
+        # logging.debug(f"Remapped labels: {labels}")
     else:
         labels = cluster_labels
 
-    # print(f"Cluster labels after remapping: {np.unique(labels)}")
+    # logging.debug(f"Cluster labels after remapping: {np.unique(labels)}")
     return labels
 
 def kmeans_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
@@ -109,19 +98,19 @@ def hdbscan_clustering(df, feature_columns, target_column='y_true', min_cluster_
     df['HDBSCAN'] = cluster_with_remapping(df, feature_columns, hdb, target_column, remap_labels)
     return df
 
-def agglomerative_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
+def agglomerative_clustering(df, feature_columns, target_column='y_true', n_clusters=None, 
                              linkage='ward', remap_labels=False):
     agglo = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage)
     df['Agglomerative'] = cluster_with_remapping(df, feature_columns, agglo, 
                                                  target_column, remap_labels)
     return df
 
-def gmm_clustering(df, feature_columns, target_column='y_true', n_components=3, remap_labels=False):
+def gmm_clustering(df, feature_columns, target_column='y_true', n_components=None, remap_labels=False):
     gmm = GaussianMixture(n_components=n_components, random_state=0)
     df['GMM'] = cluster_with_remapping(df, feature_columns, gmm, target_column, remap_labels)
     return df
 
-def spectral_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
+def spectral_clustering(df, feature_columns, target_column='y_true', n_clusters=None, 
                         affinity='nearest_neighbors', remap_labels=False):
     spectral = SpectralClustering(n_clusters=n_clusters, affinity=affinity, random_state=0)
     df['Spectral'] = cluster_with_remapping(df, feature_columns, spectral, 
@@ -130,7 +119,7 @@ def spectral_clustering(df, feature_columns, target_column='y_true', n_clusters=
 
 # ----------------------------------- Constrained kmeans -----------------------------------
 def constrained_kmeans_clustering(df, feature_columns, target_column='y_true',
-                                  n_clusters=3, size_min=None, size_max=None,
+                                  n_clusters=None, size_min=None, size_max=None,
                                   random_state=0, remap_labels=False):
     features = df[feature_columns].to_numpy()
     n_samples = features.shape[0]
@@ -211,7 +200,7 @@ def seeded_k_means_clustering(df, feature_columns, target_column='y_true',
         initial_centroids = grouped.to_numpy()
 
         if len(initial_centroids) != n_clusters:
-            print(f"Warning: Found {len(initial_centroids)} \
+            logging.warning(f"Warning: Found {len(initial_centroids)} \
                   seed centroids, but n_clusters={n_clusters}. Falling back to default init.")
             initial_centroids = 'k-means++'
             n_init = 10
@@ -229,7 +218,7 @@ def seeded_k_means_clustering(df, feature_columns, target_column='y_true',
     return df
 
 # ----------------------------------- Novel clustering method -----------------------------------
-def novel_clustering(df, feature_columns, seeds='y_live'):
+def novel_clustering(df, feature_columns, target_column='y_true', seeds='y_live', remap_labels=False):
     """
     Perform clustering using novel clustering method and add a column to the DataFrame.
 
@@ -243,6 +232,8 @@ def novel_clustering(df, feature_columns, seeds='y_live'):
     # Instantiate and cluster
     novel_method = NovelClustering()
     df['novel_method'] = novel_method.fit(num_d)
+    # df['novel_method'] = cluster_with_remapping(df, feature_columns, novel_method, 
+    #                                             target_column, remap_labels)
     return df
 
 # ----------------------------------- Deep Embedding Clustering (DEC) ------------------------
@@ -264,19 +255,41 @@ def dec_clustering(df, feature_columns, num_clusters=3,
     return df
 
 # ----------------------------------- Run and time clusterings -----------------------------------
-def run_and_time_clusterings(df, dataset_name, feature_columns, clustering_configs, clustering_flags):
+
+def run_and_time_clusterings(df, dataset_name, feature_columns, clustering_configs, clustering_flags, skip_clusterings):
+    logging.debug("\n=== Running clustering algorithms for dataset: %s ===", dataset_name)
+    
     runtimes = {}
+    skip_methods = skip_clusterings.get(dataset_name, set())
     for name, config in clustering_configs.items():
         if clustering_flags.get(name, False):
-            print(f"Running {name} with params: {config['params']}")
+            if name in skip_methods:
+                logging.debug("    Skipping clustering method %s for dataset %s due to skip configuration.", name, dataset_name)
+                df[name] = -1  # mark skipped methods with invalid cluster id
+                runtimes[name] = None
+                continue
+            
+            logging.debug("\n--> Running clustering method: %s", name)
+            logging.debug("    Parameters: %s", config['params'])
             df_c = df.copy()
             start = time.time()
-            df[name] = config['function'](df_c, feature_columns, **config['params'])[name]
-            runtimes[name] = time.time() - start
+            try:
+                result = config['function'](df_c, feature_columns, **config['params'])
+                df[name] = result[name]
+                elapsed = time.time() - start
+                runtimes[name] = elapsed
+                logging.debug("    Completed %s in %.4f seconds.", name, elapsed)
+            except Exception as e:
+                logging.warning("    ERROR while running %s: %s", name, e)
+                df[name] = -1  # fallback to invalid cluster id
+                runtimes[name] = None
 
     # Convert runtimes dict to DataFrame with dataset name
     runtime_df = pd.DataFrame([
         {"Algorithm": algo, "Runtime (s)": rt, "Dataset": dataset_name}
         for algo, rt in runtimes.items()
     ])
+
+    logging.debug("\n=== Finished all clusterings for %s ===\n", dataset_name)
     return df, runtime_df
+
