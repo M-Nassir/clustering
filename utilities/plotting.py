@@ -3,7 +3,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-import umap  # Import UMAP for dimensionality reduction
+import umap  
 import os
 
 def plot_clusters(df, feature_columns, label_column, 
@@ -150,7 +150,6 @@ def plot_enabled_clusterings(df, clustering_flags, feature_columns,
                 filepath = os.path.join(plot_save_path, filename)
                 fig.savefig(filepath)
                 print(f"Saved plot to {filepath}")
-
 
 def plot_confusion_matrices_for_clustering(df, true_label_col, clustering_flags, 
                                            title_prefix="Confusion Matrix", exclude_noise=False):
