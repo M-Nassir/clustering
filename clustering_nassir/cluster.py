@@ -100,9 +100,23 @@ class NovelClustering:
             cluster_points = X[y_current_labels == label]
 
             if cluster_points.shape[0] > 0:
-                cluster_median = np.median(cluster_points, axis=0)
+                if cluster_points.shape[0] > 1000:
+                    sample_idx = np.random.choice(cluster_points.shape[0], 1000, replace=False)
+                    sample = cluster_points[sample_idx]
+                else:
+                    sample = cluster_points
+
+                cluster_median = np.median(sample, axis=0)
                 mse = np.mean(np.square(cluster_points - cluster_median))
                 mse_array[idx] = mse
+
+            # ---- Uncomment if using entire cluster points instead of a sample ----
+            # if cluster_points.shape[0] > 0:
+            #     cluster_median = np.median(cluster_points, axis=0)
+            #     mse = np.mean(np.square(cluster_points - cluster_median))
+            #     mse_array[idx] = mse
+            # ---- Uncomment if using entire cluster points instead of a sample ----
+
 
         # Sort clusters by increasing MSE
         sort_indices = np.argsort(mse_array)
@@ -185,6 +199,7 @@ class NovelClustering:
                 if claim_anomalies(cluster_label, clf):
                     cluster_changed = True  # points were claimed, so cluster has changed
 
+        # print("Final iteration count:", itr)
         return y_current_labels
       
     def _final_claim_anomalies(self, X, y_current_labels):
