@@ -1,124 +1,175 @@
 # %%
 # ---------------------------- Imports and Setup ----------------------------
+
+# Standard Library Imports
 import os
 import sys
+import logging
 from pathlib import Path
+import random
+
+# Third-party Libraries
 import numpy as np
 import pandas as pd
-from IPython.display import display
 import plotly.express as px
-import logging
+from IPython.display import display
 
-# Project root resolution
+# Internal Configuration
+pd.set_option('display.max_rows', 200)
+
+# Project Root Resolution
 CURRENT_DIR = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
 ROOT_PATH = CURRENT_DIR.parent
-sys.path.insert(0, str(ROOT_PATH))
+sys.path.insert(0, str(ROOT_PATH))  # Add project root to sys.path
 
-# ---------------------------- Module Imports -------------------------------
+# -------------------------- Internal Module Imports ------------------------
+
+# Dataset and Clustering
 from dataset_config import dataset_dict
 from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
     agglomerative_clustering, gmm_clustering, spectral_clustering,
     constrained_kmeans_clustering, copk_means_clustering, hdbscan_clustering, 
-    seeded_k_means_clustering, novel_clustering, dec_clustering,
-    run_and_time_clusterings,
+    seeded_k_means_clustering, novel_clustering, novel_clustering2, dec_clustering,
+    run_and_time_clusterings
 )
+
+# Plotting Utilities
 from utilities.plotting import (
     plot_clusters, plot_enabled_clusterings, 
-    plot_confusion_matrices_for_clustering,
+    plot_confusion_matrices_for_clustering
 )
+
+# Clustering Utilities
 from utilities.cluster_utilities import save_df, combine_results
 from utilities.evaluation_metrics import (
     compute_accuracy, compute_purity, compute_homogeneity, compute_ari,
     compute_completeness, compute_v_measure, compute_nmi, compute_fmi,
     compute_silhouette, compute_davies_bouldin, compute_calinski_harabasz,
-    evaluate_clustering_metrics,
+    evaluate_clustering_metrics
 )
 from utilities.generate_load_data import load_dataset
-        
+
 # %%
 # -------------------------- Experiment Configuration ------------------------
 
-IS_TESTING = True
-RESULTS_FOLDER = 'results'
-PLOT_FIGURES = False
-SAVE_RESULTS = True
-SAVE_PLOTS = False
-PLOT_SAVE_PATH = Path.home() / "Google Drive/docs/A_computational_theory_of_clustering/figures"
-logging.basicConfig(level=logging.DEBUG if IS_TESTING else logging.WARNING,
-                    format="%(levelname)s: %(message)s"
-)
-# Random seed
-default_random_seed = np.random.randint(0, 10000)
-logging.debug("Random seed used for this run: %s", default_random_seed)
-logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
+class Config:
+    """Centralised configuration settings."""
+    IS_TESTING = True
+    RESULTS_FOLDER = Path("results")
+    PLOT_FIGURES = True
+    SAVE_RESULTS = True
+    SAVE_PLOTS = False
+    PLOT_SAVE_PATH = Path.home() / "Google Drive/docs/A_computational_theory_of_clustering/figures"
+    RANDOM_SEED = random.randint(0, 10_000) #4383  # For reproducibility
+
+def setup_logging(is_testing: bool) -> logging.Logger:
+    """Initialise and return logger with level based on testing mode."""
+    logging.basicConfig(
+        level=logging.DEBUG if is_testing else logging.WARNING,
+        format="%(levelname)s: %(message)s",
+        handlers=[logging.StreamHandler()]
+    )
+
+    # Suppress matplotlib font warnings
+    logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
+
+    logger = logging.getLogger("clustering")
+    logger.debug(f"Random seed used for this run: {Config.RANDOM_SEED}")
+    return logger
+
+# Initialise project-wide logger
+my_logger = setup_logging(Config.IS_TESTING)
 
 # -------------------------- Dataset Setup -----------------------------------
 
-single_dataset_index = None
-dataset_indices = [single_dataset_index] if single_dataset_index is not None else list(dataset_dict.keys())
+# Set this to a specific dataset index to run only one dataset
+SINGLE_DATASET_INDEX = None
 
-for dataset_index in dataset_indices:     
-    dataset_settings = dataset_dict[dataset_index]
+# Determine which dataset(s) to process
+dataset_indices = [SINGLE_DATASET_INDEX] if SINGLE_DATASET_INDEX is not None else list(dataset_dict.keys())
 
-    # Pull from settings with fallbacks
-    default_random_seed = dataset_settings["random_seed"] if dataset_settings.get("random_seed") is not None else default_random_seed
-    dataset_name = dataset_settings["name"]
-    plot_figures = dataset_settings.get("plot_figure", PLOT_FIGURES)
-    k = dataset_settings.get("k", None)
-    percent_labelled = dataset_settings.get("percent_labelled", None)
-    standardise = dataset_settings.get("standardise", True)
+for dataset_index in dataset_indices:
+    dataset_cfg = dataset_dict[dataset_index]
 
-    logging.debug("Dataset name: %s", dataset_name)
-    logging.debug("Random seed: %s", default_random_seed)
+    # Resolve dataset parameters with fallbacks
+    random_seed = dataset_cfg["random_seed"] if dataset_cfg.get("random_seed") is not None else Config.RANDOM_SEED
+    dataset_name = dataset_cfg["name"]
+    plot_figures_dataset_specific = dataset_cfg.get("plot_figure", Config.PLOT_FIGURES)
+    k = dataset_cfg.get("k", None)
+    percent_labelled = dataset_cfg.get("percent_labelled", None)
+    standardise = dataset_cfg.get("standardise", True)
+
+    my_logger.debug(f"Processing dataset: {dataset_name}")
+    my_logger.debug(f"  Random seed: {random_seed}")
+    my_logger.debug(f"  Plot figures: {plot_figures_dataset_specific}")
+    my_logger.debug(f"  Standardise: {standardise}")
+    my_logger.debug(f"  k: {k}, Percent labelled: {percent_labelled}")
 
     # -------------------------- Load Dataset ------------------------------------
 
-    logging.info(
-        "Loading dataset: %s with parameters: \nrandom_seed=%s,\nk=%s,\npercent_labelled=%s,\nstandardise=%s",
-        dataset_name, default_random_seed, k, percent_labelled, standardise,
+    my_logger.info(
+        f"Loading dataset '{dataset_name}' with parameters:\n"
+        f"  random_seed       = {random_seed}\n"
+        f"  k                 = {k}\n"
+        f"  percent_labelled  = {percent_labelled}\n"
+        f"  standardise       = {standardise}"
     )
+
     df, num_clusters, plot_title, feature_columns = load_dataset(
         dataset_name,
-        default_random_seed,
+        random_seed,
         k,
         percent_labelled,
         standardise,
     )
 
-    logging.info("Dataset '%s' loaded successfully", dataset_name)
+    # Optional: Modify one cluster to appear anomalous or unlabeled
+    # mask = df['y_true'] == 0
+    # df.loc[mask, ['y_true', 'y_live']] = -1
 
-    logging.debug("Number of examples: %s", df.shape[0])
-    logging.debug("Number of features: %s", df.shape[1])
-    logging.debug('Class distribution:')
-    logging.debug(df['y_live'].value_counts())
-    logging.debug('\nClass proportions (%):')
-    logging.debug(df['y_true'].value_counts(normalize=True).mul(100).round(2))
+    my_logger.info(f"Dataset '{dataset_name}' loaded successfully.")
+    my_logger.debug(f"  Number of examples: {df.shape[0]}")
+    my_logger.debug(f"  Number of features: {df.shape[1]}")
+    my_logger.debug("  Class distribution (y_live):\n%s", df['y_live'].value_counts())
+    my_logger.debug(f"  Class proportions (y_true, %):\n{df['y_true'].value_counts(normalize=True).mul(100).round(2)}")
 
-    # -------------------- Plot dataset and seeds only separately -----------------
+    # -------------------- Plot Dataset and Seeds Separately --------------------
 
-    if PLOT_FIGURES:
+    if Config.PLOT_FIGURES:
+        my_logger.info("Plotting dataset: %s", dataset_name)
+
         # Plot with true labels
         fig1 = plot_clusters(
-            df, feature_columns, label_column='y_true',
-            x_axis_label='', y_axis_label='Count',
-            legend_label='Cluster labels', 
-            title='', show_seeds_only=False
+            df,
+            feature_columns,
+            label_column='y_true',
+            x_axis_label='',
+            y_axis_label='Count',
+            legend_label='Cluster Labels',
+            title=f"{dataset_name} (Ground Truth)",
+            show_seeds_only=False,
         )
 
         # Plot with seed labels only
         fig2 = plot_clusters(
-            df, feature_columns, label_column='y_live', 
-            title=f"{dataset_name} (seeds only)", 
-            show_seeds_only=True
+            df,
+            feature_columns,
+            label_column='y_live',
+            title=f"{dataset_name} (Seed Labels Only)",
+            show_seeds_only=True,
         )
 
-        if SAVE_PLOTS:
-            fig1_path = os.path.join(PLOT_SAVE_PATH, f"{dataset_name}_ytrue.png")
-            fig2_path = os.path.join(PLOT_SAVE_PATH, f"{dataset_name}_ylive_seeds_only.png")
+        if Config.SAVE_PLOTS:
+            Config.PLOT_SAVE_PATH.mkdir(parents=True, exist_ok=True)
+
+            fig1_path = Config.PLOT_SAVE_PATH / f"{dataset_name}_ytrue.png"
+            fig2_path = Config.PLOT_SAVE_PATH / f"{dataset_name}_ylive_seeds_only.png"
 
             fig1.savefig(fig1_path, dpi=300, bbox_inches='tight')
             fig2.savefig(fig2_path, dpi=300, bbox_inches='tight')
+
+            my_logger.info("Saved plots to:\n- %s\n- %s", fig1_path, fig2_path)
 
     # ---------------------------- Clustering Algorithm Setup and Execution ------------------------
 
@@ -126,21 +177,22 @@ for dataset_index in dataset_indices:
     clustering_flags = {
         # Unsupervised clustering methods
         'KMeans': True,
-        'MeanShift': True, #
-        'DBSCAN': True,
-        'HDBSCAN': True,
-        'Agglomerative': True, #
-        'GMM': True,
-        'Spectral': True, #
+        'MeanShift': False, #
+        'DBSCAN': False,
+        'HDBSCAN': False,
+        'Agglomerative': False, #
+        'GMM': False,
+        'Spectral': False, #
 
         # Semi-supervised clustering methods
-        'ConstrainedKMeans': True,
-        'COPKMeans': True, #
-        'SeededKMeans': True,
+        'ConstrainedKMeans': False,
+        'COPKMeans': False, #
+        'SeededKMeans': False,
         'novel_method': True,
+        'novel_method2': True,
 
         # Deep learning (self-)unsupervised clustering
-        'DEC': True,
+        'DEC': False,
     }
 
     # Configuration dictionary mapping method names to their functions and parameters
@@ -206,7 +258,7 @@ for dataset_index in dataset_indices:
                 'n_clusters': num_clusters,
                 'target_column': 'y_true',
                 'size_min': 15,
-                'size_max': df.shape[0],  # max size capped by dataset size
+                'size_max': df.shape[0],
                 'remap_labels': True,
             }
         },
@@ -230,6 +282,14 @@ for dataset_index in dataset_indices:
         },
         'novel_method': {
             'function': novel_clustering,
+            'params': {
+                'target_column': 'y_true',
+                'seeds': 'y_live',
+                'remap_labels': False,  # No label remapping for novel method
+            }
+        },
+        'novel_method2': {
+            'function': novel_clustering2,
             'params': {
                 'target_column': 'y_true',
                 'seeds': 'y_live',
@@ -269,19 +329,20 @@ for dataset_index in dataset_indices:
     )
 
     # Plot results of enabled clustering algorithms if plotting is enabled
-    if PLOT_FIGURES:
-        plot_enabled_clusterings(
-            df,
-            clustering_flags,
-            feature_columns,
-            plot_save_path=PLOT_SAVE_PATH,
-            dataset_name=dataset_name,
-            save_plots=SAVE_PLOTS,
-        )
+    if Config.IS_TESTING:
+        if plot_figures_dataset_specific: # this tells us if in config file we want to plot for this dataset
+            plot_enabled_clusterings(
+                df,
+                clustering_flags,
+                feature_columns,
+                plot_save_path=Config.PLOT_SAVE_PATH,
+                dataset_name=dataset_name,
+                save_plots=Config.SAVE_PLOTS,
+            )
 
-    if SAVE_RESULTS:
+    if Config.SAVE_RESULTS:
         logging.info("Saving clustering runtimes for dataset: %s", dataset_name)
-        save_df(runtime_df, "runtime", dataset_name, RESULTS_FOLDER)
+        save_df(runtime_df, "runtime", dataset_name, Config.RESULTS_FOLDER)
         
     # ---------------------------- Metric Evaluation ------------------------
 
@@ -313,8 +374,8 @@ for dataset_index in dataset_indices:
     )
 
     # Save the metrics DataFrame and display it
-    if SAVE_RESULTS:
-        save_df(df_metrics, "clustering_metrics", dataset_name, results_folder=RESULTS_FOLDER)
+    if Config.SAVE_RESULTS:
+        save_df(df_metrics, "clustering_metrics", dataset_name, results_folder=Config.RESULTS_FOLDER)
     # display(df_metrics)
 
     # ---------------------------- Plot Confusion Matrices ------------------------
@@ -508,10 +569,11 @@ for dataset_index in dataset_indices:
             fig.show()
 
 # ---- Combine the results from all datasets into a single DataFrame ----
+
 metrics_plus_cols_to_keep = ['Algorithm', 'Dataset', 
                             'Purity', 'V-Measure', 'NMI', 
                             'ARI', 'FMI', 'Runtime (s)']
-df_cr = combine_results(RESULTS_FOLDER)
+df_cr = combine_results(Config.RESULTS_FOLDER)
 df_cr = df_cr[[col for col in metrics_plus_cols_to_keep if col in df_cr.columns]]
 display(df_cr)
 
