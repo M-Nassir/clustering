@@ -254,7 +254,12 @@ def generate_clustering_1d_gauss_anomalies(random_seed=None,
 # --------------------------------------------------------------------------
 
 # # Experimental function WIP
-# def generate_clustering_2d_gauss_data_differe_sizes(
+# def generate_clustering_2d_gauss_data_wip( 
+#         # when taking samples of seed points need to take enough of the smaller clusters, as taking random
+#         # sample means more of the larger clusters are sampled. But the novel clustering still works very well
+#         # here it seems; also need to correctly handle the anomaly class for k-means, etc. need to look through
+#         # this code in detail
+                                          
 #         n_samples=10000,
 #         n_components=8,
 #         num_features=2,
