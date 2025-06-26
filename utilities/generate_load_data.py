@@ -153,9 +153,6 @@ def generate_clustering_1d_data(repeat_const=100, percent_labelled=0.03, random_
 #                         Generate 1D Gaussian Clusters with Anomalies
 # --------------------------------------------------------------------------
 
-import numpy as np
-import pandas as pd
-
 def generate_clustering_1d_gauss_anomalies(random_seed=None,
                                             labelled_percent=0.1,
                                             cluster_params=[(0, 1), (50, 3), (100, 8)],   
@@ -256,95 +253,91 @@ def generate_clustering_1d_gauss_anomalies(random_seed=None,
 #                         Generate 2D Gaussian Data
 # --------------------------------------------------------------------------
 
-import numpy as np
-import pandas as pd
-from sklearn.datasets import make_blobs
+# # Experimental function WIP
+# def generate_clustering_2d_gauss_data_differe_sizes(
+#         n_samples=10000,
+#         n_components=8,
+#         num_features=2,
+#         rand_seed=None,
+#         same_density=False,
+#         labelled_fraction=0.01,
+#         add_anomaly_cluster=True,
+#         std_dev=None,
+#     ):
+#     """
+#     Generate 2D synthetic dataset using Gaussian blobs with optional anomaly injection.
 
-# Experimental function WIP
-def generate_clustering_2d_gauss_data_differe_sizes(
-        n_samples=10000,
-        n_components=8,
-        num_features=2,
-        rand_seed=None,
-        same_density=False,
-        labelled_fraction=0.01,
-        add_anomaly_cluster=True,
-        std_dev=None,
-    ):
-    """
-    Generate 2D synthetic dataset using Gaussian blobs with optional anomaly injection.
+#     Returns:
+#     - df (pd.DataFrame): DataFrame with 'f0', ..., 'fN', 'y_true', and 'y_live'.
+#     """
 
-    Returns:
-    - df (pd.DataFrame): DataFrame with 'f0', ..., 'fN', 'y_true', and 'y_live'.
-    """
+#     np.random.seed(rand_seed)
 
-    np.random.seed(rand_seed)
+#     # Strongly imbalanced cluster sizes
+#     cluster_sizes = [150, 200, 500, 800, 1350, 1800, 2500, 2700]
+#     assert sum(cluster_sizes) == n_samples, "Cluster sizes must sum to n_samples"
 
-    # Strongly imbalanced cluster sizes
-    cluster_sizes = [150, 200, 500, 800, 1350, 1800, 2500, 2700]
-    assert sum(cluster_sizes) == n_samples, "Cluster sizes must sum to n_samples"
+#     X_list, y_list = [], []
 
-    X_list, y_list = [], []
+#     # Slightly wider spread of cluster centers
+#     center_box = (-20, 20)
+#     centers = [np.random.uniform(center_box[0], center_box[1], size=num_features)
+#                for _ in range(n_components)]
 
-    # Slightly wider spread of cluster centers
-    center_box = (-20, 20)
-    centers = [np.random.uniform(center_box[0], center_box[1], size=num_features)
-               for _ in range(n_components)]
+#     for i, (size, center) in enumerate(zip(cluster_sizes, centers)):
+#         # Vary spread to break density assumptions
+#         std = std_dev if same_density else np.random.uniform(0.8, 3.0)
+#         X_blob, _ = make_blobs(
+#             n_samples=size,
+#             centers=[center],
+#             n_features=num_features,
+#             cluster_std=std,
+#             random_state=(None if rand_seed is None else rand_seed + i)
+#         )
+#         X_list.append(X_blob)
+#         y_list.append(np.full(size, i))
 
-    for i, (size, center) in enumerate(zip(cluster_sizes, centers)):
-        # Vary spread to break density assumptions
-        std = std_dev if same_density else np.random.uniform(0.8, 3.0)
-        X_blob, _ = make_blobs(
-            n_samples=size,
-            centers=[center],
-            n_features=num_features,
-            cluster_std=std,
-            random_state=(None if rand_seed is None else rand_seed + i)
-        )
-        X_list.append(X_blob)
-        y_list.append(np.full(size, i))
+#     X = np.vstack(X_list)
+#     y_true = np.concatenate(y_list)
 
-    X = np.vstack(X_list)
-    y_true = np.concatenate(y_list)
+#     df = pd.DataFrame(X, columns=[f"f{i}" for i in range(num_features)])
+#     df['y_true'] = y_true
+#     df['y_live'] = -1
 
-    df = pd.DataFrame(X, columns=[f"f{i}" for i in range(num_features)])
-    df['y_true'] = y_true
-    df['y_live'] = -1
+#     # Label a small random fraction of points
+#     labelled_indices = np.random.choice(df.index, size=int(n_samples * labelled_fraction), replace=False)
+#     df.loc[labelled_indices, 'y_live'] = df.loc[labelled_indices, 'y_true']
 
-    # Label a small random fraction of points
-    labelled_indices = np.random.choice(df.index, size=int(n_samples * labelled_fraction), replace=False)
-    df.loc[labelled_indices, 'y_live'] = df.loc[labelled_indices, 'y_true']
+#     # Label stats
+#     n_labelled = len(labelled_indices)
+#     p_labelled = 100 * n_labelled / len(df)
+#     logging.info("Number of labelled examples: %s", n_labelled)
+#     logging.info("Number of unlabelled examples: %s", len(df) - n_labelled)
+#     logging.info("Percentage of labelled data: %.2f%%", p_labelled)
 
-    # Label stats
-    n_labelled = len(labelled_indices)
-    p_labelled = 100 * n_labelled / len(df)
-    logging.info("Number of labelled examples: %s", n_labelled)
-    logging.info("Number of unlabelled examples: %s", len(df) - n_labelled)
-    logging.info("Percentage of labelled data: %.2f%%", p_labelled)
+#     # Add anomalies nearby but not inside existing clusters
+#     if add_anomaly_cluster:
+#         anomaly_centers = [
+#             np.array([15, 15]),
+#             np.array([-12, -14]),
+#             np.array([8, -18])
+#         ]
+#         anomaly_stds = [1.0, 1.5, 2.0]
 
-    # Add anomalies nearby but not inside existing clusters
-    if add_anomaly_cluster:
-        anomaly_centers = [
-            np.array([15, 15]),
-            np.array([-12, -14]),
-            np.array([8, -18])
-        ]
-        anomaly_stds = [1.0, 1.5, 2.0]
+#         X_anom = []
+#         for c, s in zip(anomaly_centers, anomaly_stds):
+#             blob, _ = make_blobs(n_samples=100, centers=[c], n_features=num_features,
+#                                  cluster_std=s, random_state=rand_seed)
+#             X_anom.append(blob)
 
-        X_anom = []
-        for c, s in zip(anomaly_centers, anomaly_stds):
-            blob, _ = make_blobs(n_samples=100, centers=[c], n_features=num_features,
-                                 cluster_std=s, random_state=rand_seed)
-            X_anom.append(blob)
+#         X_anom = np.vstack(X_anom)
+#         df_anom = pd.DataFrame(X_anom, columns=[f"f{i}" for i in range(num_features)])
+#         df_anom['y_true'] = -1
+#         df_anom['y_live'] = -1
 
-        X_anom = np.vstack(X_anom)
-        df_anom = pd.DataFrame(X_anom, columns=[f"f{i}" for i in range(num_features)])
-        df_anom['y_true'] = -1
-        df_anom['y_live'] = -1
+#         df = pd.concat([df, df_anom], ignore_index=True)
 
-        df = pd.concat([df, df_anom], ignore_index=True)
-
-    return df
+#     return df
 
 def generate_clustering_2d_gauss_data(
         n_samples=10000,
