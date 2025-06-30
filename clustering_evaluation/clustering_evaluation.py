@@ -7,6 +7,9 @@ import sys
 import logging
 from pathlib import Path
 import random
+import cProfile
+import pstats
+import io
 
 # Third-party Libraries
 import numpy as np
@@ -30,7 +33,7 @@ from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
     agglomerative_clustering, gmm_clustering, spectral_clustering,
     constrained_kmeans_clustering, copk_means_clustering, hdbscan_clustering, 
-    seeded_k_means_clustering, novel_clustering, novel_clustering2, dec_clustering,
+    seeded_k_means_clustering, novel_clustering, dec_clustering,
     run_and_time_clusterings
 )
 
@@ -55,27 +58,36 @@ from utilities.generate_load_data import load_dataset
 
 class Config:
     """Centralised configuration settings."""
-    IS_TESTING = True
+    PROFILE_CODE = False
+    IS_TESTING = False
     RESULTS_FOLDER = Path("results")
-    PLOT_FIGURES = True
-    SAVE_RESULTS = True
+    PLOT_FIGURES = False
+    SAVE_RESULTS = False
     SAVE_PLOTS = False
     PLOT_SAVE_PATH = Path.home() / "Google Drive/docs/A_computational_theory_of_clustering/figures"
     RANDOM_SEED = random.randint(0, 10_000) #4383  # For reproducibility
 
 def setup_logging(is_testing: bool) -> logging.Logger:
     """Initialise and return logger with level based on testing mode."""
-    logging.basicConfig(
-        level=logging.DEBUG if is_testing else logging.WARNING,
-        format="%(levelname)s: %(message)s",
-        handlers=[logging.StreamHandler()]
-    )
+
+    if is_testing:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(levelname)s: %(message)s",
+            handlers=[logging.StreamHandler()]
+        )
+    else:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(levelname)s: %(message)s",
+            handlers=[logging.StreamHandler()]
+        )
 
     # Suppress matplotlib font warnings
     logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
 
     logger = logging.getLogger("clustering")
-    logger.debug(f"Random seed used for this run: {Config.RANDOM_SEED}")
+    
     return logger
 
 # Initialise project-wide logger
@@ -101,7 +113,7 @@ for dataset_index in dataset_indices:
     standardise = dataset_cfg.get("standardise", True)
 
     my_logger.debug(f"Processing dataset: {dataset_name}")
-    my_logger.debug(f"  Random seed: {random_seed}")
+    my_logger.debug(f"  Random seed for this dataset: {random_seed}")
     my_logger.debug(f"  Plot figures: {plot_figures_dataset_specific}")
     my_logger.debug(f"  Standardise: {standardise}")
     my_logger.debug(f"  k: {k}, Percent labelled: {percent_labelled}")
@@ -110,10 +122,10 @@ for dataset_index in dataset_indices:
 
     my_logger.info(
         f"Loading dataset '{dataset_name}' with parameters:\n"
-        f"  random_seed       = {random_seed}\n"
-        f"  k                 = {k}\n"
-        f"  percent_labelled  = {percent_labelled}\n"
-        f"  standardise       = {standardise}"
+        f"  random_seed for this dataset = {random_seed}\n"
+        f"  k                            = {k}\n"
+        f"  percent_labelled             = {percent_labelled}\n"
+        f"  standardise                  = {standardise}"
     )
 
     df, num_clusters, plot_title, feature_columns = load_dataset(
@@ -129,11 +141,12 @@ for dataset_index in dataset_indices:
     # df.loc[mask, ['y_true', 'y_live']] = -1
 
     my_logger.info(f"Dataset '{dataset_name}' loaded successfully.")
-    my_logger.debug(f"  Number of examples: {df.shape[0]}")
-    my_logger.debug(f"  Number of features: {df.shape[1]}")
+    
+    my_logger.info(f"  Number of examples: {df.shape[0]}")
+    my_logger.info(f"  Number of features: {len(feature_columns)}")
     my_logger.debug("  Class distribution (y_live):\n%s", df['y_live'].value_counts())
     my_logger.debug(f"  Class proportions (y_true, %):\n{df['y_true'].value_counts(normalize=True).mul(100).round(2)}")
-
+# %%
     # -------------------- Plot Dataset and Seeds Separately --------------------
 
     if Config.PLOT_FIGURES:
@@ -177,22 +190,21 @@ for dataset_index in dataset_indices:
     clustering_flags = {
         # Unsupervised clustering methods
         'KMeans': True,
-        'MeanShift': False, #
-        'DBSCAN': False,
-        'HDBSCAN': False,
-        'Agglomerative': False, #
-        'GMM': False,
-        'Spectral': False, #
+        'MeanShift': True, #
+        'DBSCAN': True,
+        'HDBSCAN': True,
+        'Agglomerative': True, #
+        'GMM': True,
+        'Spectral': True, #
 
         # Semi-supervised clustering methods
-        'ConstrainedKMeans': False,
-        'COPKMeans': False, #
-        'SeededKMeans': False,
+        'ConstrainedKMeans': True,
+        'COPKMeans': True, #
+        'SeededKMeans': True,
         'novel_method': True,
-        'novel_method2': True,
 
         # Deep learning (self-)unsupervised clustering
-        'DEC': False,
+        'DEC': True,
     }
 
     # Configuration dictionary mapping method names to their functions and parameters
@@ -288,14 +300,6 @@ for dataset_index in dataset_indices:
                 'remap_labels': False,  # No label remapping for novel method
             }
         },
-        'novel_method2': {
-            'function': novel_clustering2,
-            'params': {
-                'target_column': 'y_true',
-                'seeds': 'y_live',
-                'remap_labels': False,  # No label remapping for novel method
-            }
-        },
         'DEC': {
             'function': dec_clustering,
             'params': {
@@ -317,8 +321,23 @@ for dataset_index in dataset_indices:
             "Spectral",
             "COPKMeans"
         },
+        "covType": {
+            "MeanShift",
+            "Agglomerative",
+            "Spectral",
+            "COPKMeans"
+            "DEC" # DEC	covtype_with_class	0.4910	0.0433	0.0433	0.0090	0.2403	622.200259
+        },
     }
+
+    # At the point where you run clustering algorithms:
+
+    if Config.PROFILE_CODE:
+        pr = cProfile.Profile()
+        pr.enable()
+
     # Execute clustering algorithms based on the provided configurations and flags
+    my_logger.info("******* Preparing to apply clustering methods for dataset %s *******" % dataset_name)
     df, runtime_df = run_and_time_clusterings(
         df,
         dataset_name,
@@ -327,6 +346,19 @@ for dataset_index in dataset_indices:
         clustering_flags,
         SKIP_CLUSTERING,
     )
+
+    if Config.PROFILE_CODE:
+        pr.disable()
+
+        # Create a stream to hold profiling stats
+        s = io.StringIO()
+        sortby = 'cumtime'  # Sort by cumulative time to see bottlenecks
+
+        ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+        ps.print_stats(50)  # Show top 50 lines
+        print(s.getvalue())
+
+    my_logger.info("******* Completed running clustering for dataset %s for all methods *******" % dataset_name)
 
     # Plot results of enabled clustering algorithms if plotting is enabled
     if Config.IS_TESTING:
@@ -341,7 +373,6 @@ for dataset_index in dataset_indices:
             )
 
     if Config.SAVE_RESULTS:
-        logging.info("Saving clustering runtimes for dataset: %s", dataset_name)
         save_df(runtime_df, "runtime", dataset_name, Config.RESULTS_FOLDER)
         
     # ---------------------------- Metric Evaluation ------------------------
@@ -359,12 +390,12 @@ for dataset_index in dataset_indices:
         ('FMI', compute_fmi, True),
 
         # Internal metrics (do NOT require ground truth labels)
-        ('Silhouette Score', compute_silhouette, False),
-        ('Davies-Bouldin Index', compute_davies_bouldin, False),
-        ('Calinski-Harabasz Index', compute_calinski_harabasz, False),
+        # ('Silhouette Score', compute_silhouette, False),
+        # ('Davies-Bouldin Index', compute_davies_bouldin, False),
+        # ('Calinski-Harabasz Index', compute_calinski_harabasz, False),
     ]
 
-    # Evaluate clustering results using the specified metrics
+    my_logger.info("Preparing to evaluate clustering metrics for all methods for dataset: %s", dataset_name)
     df_metrics = evaluate_clustering_metrics(
         df=df,
         metrics_dict=all_metrics,
@@ -373,6 +404,8 @@ for dataset_index in dataset_indices:
         feature_columns=feature_columns,
     )
 
+    my_logger.info("******* Completed running clustering metrics for all methods for dataset %s *******" % dataset_name)
+    
     # Save the metrics DataFrame and display it
     if Config.SAVE_RESULTS:
         save_df(df_metrics, "clustering_metrics", dataset_name, results_folder=Config.RESULTS_FOLDER)
@@ -568,7 +601,7 @@ for dataset_index in dataset_indices:
 
             fig.show()
 
-# ---- Combine the results from all datasets into a single DataFrame ----
+# %% ---- Combine the results from all datasets into a single DataFrame ----
 
 metrics_plus_cols_to_keep = ['Algorithm', 'Dataset', 
                             'Purity', 'V-Measure', 'NMI', 
@@ -576,6 +609,38 @@ metrics_plus_cols_to_keep = ['Algorithm', 'Dataset',
 df_cr = combine_results(Config.RESULTS_FOLDER)
 df_cr = df_cr[[col for col in metrics_plus_cols_to_keep if col in df_cr.columns]]
 display(df_cr)
+
+# %% produce the tables with graded colouring
+import pandas as pd
+
+# Define metric columns to pivot
+metrics = ["Purity", "V-Measure", "NMI", "ARI", "FMI", "Runtime (s)"]
+
+# Remove '_with_class' suffix from Dataset column
+df_cr["Dataset"] = df_cr["Dataset"].str.replace("_with_class", "", regex=False)
+
+# Create a dictionary of DataFrames: one for each metric
+metric_dfs = {
+    metric: df_cr.pivot(index="Dataset", columns="Algorithm", values=metric)
+    for metric in metrics
+}
+
+# Apply styling with gradient colouring
+styled_dfs = {}
+
+for metric, metric_df in metric_dfs.items():
+    if metric == "Runtime (s)":
+        # Lower is better → reverse red colormap
+        styled = metric_df.style.background_gradient(cmap="Reds_r", axis=1)
+    else:
+        # Higher is better → green colormap
+        styled = metric_df.style.background_gradient(cmap="Greens", axis=1)
+
+    styled_dfs[metric] = styled
+    print(f"\n=== {metric} ===")
+    display(styled)
+
+
 
     # %% Experiment code when exploring results for MNIST
     # import matplotlib.pyplot as plt
