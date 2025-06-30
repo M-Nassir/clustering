@@ -84,7 +84,7 @@ def evaluate_clustering_metrics(df, metrics_dict,
     results = []
 
     for method in clustering_methods:
-        logging.info("\n--> Processing method: %s", method)
+        logging.debug("\n--> Processing method: %s", method)
         row = {'Algorithm': method}
 
         # Filter for outliers (only once per method)
