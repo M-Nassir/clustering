@@ -13,7 +13,6 @@ from sklearn.metrics import confusion_matrix
 from clustpy.deep import DEC
 import time
 import logging
-pd.set_option('display.max_rows', None)
 
 def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
     y_pred = np.asarray(y_pred)
@@ -232,8 +231,23 @@ def novel_clustering(df, feature_columns, target_column='y_true', seeds='y_live'
     # Instantiate and cluster
     novel_method = NovelClustering()
     df['novel_method'] = novel_method.fit(num_d)
-    # df['novel_method'] = cluster_with_remapping(df, feature_columns, novel_method, 
-    #                                             target_column, remap_labels)
+
+    return df
+
+def novel_clustering2(df, feature_columns, target_column='y_true', seeds='y_live', remap_labels=False):
+    """
+    Perform clustering using novel clustering method and add a column to the DataFrame.
+
+    Returns:
+    - df (pd.DataFrame): DataFrame with predicted cluster labels.
+    """
+
+    # Select feature columns and 'y_live' for clustering input
+    num_d = df[feature_columns + [seeds]].to_numpy()
+
+    # Instantiate and cluster
+    novel_method2 = NovelClustering2()
+    df['novel_method2'] = novel_method2.fit(num_d)
     return df
 
 # ----------------------------------- Deep Embedding Clustering (DEC) ------------------------
