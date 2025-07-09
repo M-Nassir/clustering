@@ -154,7 +154,7 @@ def generate_clustering_1d_data(repeat_const=100, percent_labelled=0.03, random_
 # --------------------------------------------------------------------------
 
 def generate_clustering_1d_gauss_anomalies(random_seed=None,
-                                            labelled_percent=0.1,
+                                            labelled_percent=0.01,
                                             cluster_params=[(0, 1), (50, 3), (100, 8)],   
                                             samples_per_cluster=[10000, 10000, 10000],
                                             include_anomaly_cluster=True):
@@ -211,7 +211,7 @@ def generate_clustering_1d_gauss_anomalies(random_seed=None,
     # Label a small, class-balanced percentage of data
     df['y_live'] = -1
     true_classes = df[df['y_true'] >= 0]['y_true'].unique()
-    labelled_total = int((labelled_percent / 100) * len(df))
+    labelled_total = int((labelled_percent) * len(df))
 
     # Ensure at least one per class, and balance the rest
     labelled_per_class = max(1, labelled_total // len(true_classes))
