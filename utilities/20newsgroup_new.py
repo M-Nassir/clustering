@@ -13,8 +13,8 @@ import sklearn.datasets as sk_data
 from sklearn.datasets import fetch_20newsgroups
 
 import nltk
-from nltk.stem import WordNetLemmatizer  # Used to lemmatize words
-from nltk.tokenize import word_tokenize  # Used to extract words from documents
+from nltk.stem import WordNetLemmatizer  
+from nltk.tokenize import word_tokenize  
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import StandardScaler
 from wordcloud import STOPWORDS
@@ -25,11 +25,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib as mpl
 import plotly_express as px
-from bokeh.plotting import show, save, output_notebook, output_file
-
-# # project imports
-# # from utilities.cluster_utilities import get_seeds, plot_2D, cluster_acc, get_top_keywords
-# # from clustering_suite.cluster import Nassir_clustering
 
 from sklearn.decomposition import PCA
 import umap
@@ -146,10 +141,10 @@ top_keywords_list = [get_top_n_keywords(tfidf_X[i], feature_names, n=10) for i i
 # -----------------------------------------------------------------------
 
 # UMAP embedding to 10 dimensions (for later downstream tasks)
-reducer = umap.UMAP(n_components=10, metric='cosine', random_state=42)
+reducer = umap.UMAP(n_components=10, metric='cosine') # , random_state=42
 embedding = reducer.fit_transform(tfidf_X)
 
-# Plot first two components colored by cluster labels
+# Plot first two components coloured by cluster labels
 plt.figure(figsize=(12, 6))
 sns.scatterplot(
     x=embedding[:, 0],

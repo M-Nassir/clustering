@@ -159,3 +159,4 @@ todo.md
 dcc/
 notebooks/results
 results/
+*.tex

@@ -6,7 +6,7 @@ Created on Tue Sep  6 15:08:06 2022
 @author: nassirmohammad
 """
 import pytest
-from models.cluster import Nassir_clustering
+from clustering_suite.cluster import Nassir_clustering
 import numpy as np
 import pandas as pd
 
