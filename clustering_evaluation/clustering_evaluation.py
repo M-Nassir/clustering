@@ -1,7 +1,6 @@
 # %%
 # ---------------------------- Imports and Setup ----------------------------
 
-# Standard Library Imports
 import os
 import sys
 import logging
@@ -11,23 +10,20 @@ import cProfile
 import pstats
 import io
 
-# Third-party Libraries
 import numpy as np
 import pandas as pd
 import plotly.express as px
 from IPython.display import display
-
-# Internal Configuration
 pd.set_option('display.max_rows', 200)
 
-# Project Root Resolution
+# Project Root Resolution and add to sys.path
 CURRENT_DIR = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
 ROOT_PATH = CURRENT_DIR.parent
-sys.path.insert(0, str(ROOT_PATH))  # Add project root to sys.path
+sys.path.insert(0, str(ROOT_PATH))  
 
 # -------------------------- Internal Module Imports ------------------------
 
-# Dataset and Clustering
+# Dataset configuration and Clustering
 from dataset_config import dataset_dict
 from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
@@ -44,7 +40,7 @@ from utilities.plotting import (
 )
 
 # Clustering Utilities
-from utilities.cluster_utilities import save_df, combine_results
+from utilities.cluster_utilities import save_df, combine_results, process_df, save_metric_tables_latex
 from utilities.evaluation_metrics import (
     compute_accuracy, compute_purity, compute_homogeneity, compute_ari,
     compute_completeness, compute_v_measure, compute_nmi, compute_fmi,
@@ -65,6 +61,7 @@ class Config:
     SAVE_RESULTS = False
     SAVE_PLOTS = False
     PLOT_SAVE_PATH = Path.home() / "Google Drive/docs/A_computational_theory_of_clustering/figures"
+    TABLE_SAVE_PATH = Path.home() / "Google Drive/docs/A_computational_theory_of_clustering/tables"
     RANDOM_SEED = random.randint(0, 10_000) #4383  # For reproducibility
 
 def setup_logging(is_testing: bool) -> logging.Logger:
@@ -85,9 +82,7 @@ def setup_logging(is_testing: bool) -> logging.Logger:
 
     # Suppress matplotlib font warnings
     logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
-
     logger = logging.getLogger("clustering")
-    
     return logger
 
 # Initialise project-wide logger
@@ -104,19 +99,13 @@ dataset_indices = [SINGLE_DATASET_INDEX] if SINGLE_DATASET_INDEX is not None els
 for dataset_index in dataset_indices:
     dataset_cfg = dataset_dict[dataset_index]
 
-    # Resolve dataset parameters with fallbacks
-    random_seed = dataset_cfg["random_seed"] if dataset_cfg.get("random_seed") is not None else Config.RANDOM_SEED
+    # Resolve dataset parameters with fallbacks; default get is None
     dataset_name = dataset_cfg["name"]
+    random_seed = dataset_cfg.get("random_seed", Config.RANDOM_SEED)
     plot_figures_dataset_specific = dataset_cfg.get("plot_figure", Config.PLOT_FIGURES)
-    k = dataset_cfg.get("k", None)
-    percent_labelled = dataset_cfg.get("percent_labelled", None)
-    standardise = dataset_cfg.get("standardise", True)
-
-    my_logger.debug(f"Processing dataset: {dataset_name}")
-    my_logger.debug(f"  Random seed for this dataset: {random_seed}")
-    my_logger.debug(f"  Plot figures: {plot_figures_dataset_specific}")
-    my_logger.debug(f"  Standardise: {standardise}")
-    my_logger.debug(f"  k: {k}, Percent labelled: {percent_labelled}")
+    k = dataset_cfg.get("k")
+    percent_labelled = dataset_cfg.get("percent_labelled")
+    standardise = dataset_cfg.get("standardise", False)
 
     # -------------------------- Load Dataset ------------------------------------
 
@@ -136,17 +125,13 @@ for dataset_index in dataset_indices:
         standardise,
     )
 
-    # Optional: Modify one cluster to appear anomalous or unlabeled
-    # mask = df['y_true'] == 0
-    # df.loc[mask, ['y_true', 'y_live']] = -1
-
     my_logger.info(f"Dataset '{dataset_name}' loaded successfully.")
-    
-    my_logger.info(f"  Number of examples: {df.shape[0]}")
-    my_logger.info(f"  Number of features: {len(feature_columns)}")
+    my_logger.info("  Number of seeds: %d", (df['y_live'] != -1).sum())
+    my_logger.info("  Number of examples: %d", df.shape[0])
+    my_logger.info("  Number of features: %d", len(feature_columns))
     my_logger.debug("  Class distribution (y_live):\n%s", df['y_live'].value_counts())
-    my_logger.debug(f"  Class proportions (y_true, %):\n{df['y_true'].value_counts(normalize=True).mul(100).round(2)}")
-# %%
+    my_logger.debug("  Class proportions (y_true, %%):\n%s", df['y_true'].value_counts(normalize=True).mul(100).round(2))
+    
     # -------------------- Plot Dataset and Seeds Separately --------------------
 
     if Config.PLOT_FIGURES:
@@ -321,16 +306,15 @@ for dataset_index in dataset_indices:
             "Spectral",
             "COPKMeans"
         },
-        "covType": {
+        "cover_type_with_class": {
             "MeanShift",
             "Agglomerative",
             "Spectral",
-            "COPKMeans"
-            "DEC" # DEC	covtype_with_class	0.4910	0.0433	0.0433	0.0090	0.2403	622.200259
+            "COPKMeans",
+            "DBSCAN",
+            "ConstrainedKMeans",
         },
     }
-
-    # At the point where you run clustering algorithms:
 
     if Config.PROFILE_CODE:
         pr = cProfile.Profile()
@@ -406,10 +390,9 @@ for dataset_index in dataset_indices:
 
     my_logger.info("******* Completed running clustering metrics for all methods for dataset %s *******" % dataset_name)
     
-    # Save the metrics DataFrame and display it
+    # Save the metrics DataFrame
     if Config.SAVE_RESULTS:
         save_df(df_metrics, "clustering_metrics", dataset_name, results_folder=Config.RESULTS_FOLDER)
-    # display(df_metrics)
 
     # ---------------------------- Plot Confusion Matrices ------------------------
     # Plot confusion matrices for all enabled clustering methods
@@ -518,8 +501,10 @@ for dataset_index in dataset_indices:
     # -- run only for MNIST
 
     if 'MNIST_UMAP10_with_class' in dataset_name:
-
         logging.debug("Running UMAP visualization for MNIST dataset...")
+
+        # Define save directory
+        os.makedirs(Config.PLOT_SAVE_PATH, exist_ok=True)
 
         # Define file path
         project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
@@ -529,13 +514,24 @@ for dataset_index in dataset_indices:
         df_vis = pd.read_csv(csv_file_path)
 
         # Merge clustering/class columns from df into df_vis
-        for col in ['y_true', 'KMeans', 'novel_method']:
+        for col in ['y_true', 'y_live', 'KMeans', 'novel_method']:
             if col in df.columns:
                 df_vis[col] = df[col].astype(str)
             else:
                 raise KeyError(f"Column '{col}' not found in df")
 
-        # Define a custom, high-contrast colour palette for digits 0-9 and extra labels
+        df_vis['index'] = df_vis.index.astype(str)
+
+        # Collect global labels
+        all_labels = set()
+        for label_col in ['y_true', 'y_live', 'KMeans', 'novel_method']:
+            all_labels.update(df_vis[label_col].unique())
+
+        all_labels = {str(l) for l in all_labels}
+        unique_labels = sorted([l for l in all_labels if l != '-1'], key=int)
+        ordered_categories = ['-1'] + unique_labels if '-1' in all_labels else unique_labels
+
+        # Custom colours
         custom_colors = [
             '#1f77b4', '#ff7f0e', '#2ca02c', '#9467bd', '#8c564b',
             '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#aec7e8',
@@ -543,41 +539,39 @@ for dataset_index in dataset_indices:
             '#c7c7c7', '#dbdb8d', '#9edae5', '#393b79', '#637939'
         ]
 
-        df_vis['index'] = df_vis.index.astype(str)
+        custom_colors = [
+            'green', 'blue', 'black',
+            'orange', 'purple', 'brown',
+            'pink', 'cyan', 'darkblue',
+            'violet', 'magenta', 'black',
+        ]
 
-        for label_col in ['y_true', 'KMeans', 'novel_method']:
+
+        global_color_map = {}
+        for i, lbl in enumerate(ordered_categories):
+            global_color_map[lbl] = 'rgb(255,0,0)' if lbl == '-1' else custom_colors[i % len(custom_colors)]
+
+        # Create and save plots
+        for label_col in ['y_true', 'y_live', 'KMeans', 'novel_method']:
             df_vis[label_col] = df_vis[label_col].astype(str)
 
-            # Create ordered categories starting with '-1' if present, then ascending numbers
-            unique_labels = sorted(set(df_vis[label_col]) - {'-1'}, key=int)
-            ordered_categories = ['-1'] + unique_labels if '-1' in df_vis[label_col].values else unique_labels
-
-            # Build color map only for labels actually in this column
-            color_map = {}
-            for i, lbl in enumerate(ordered_categories):
-                if lbl == '-1':
-                    color_map[lbl] = 'rgb(255,0,0)'  # red for outliers
-                else:
-                    color_map[lbl] = custom_colors[i % len(custom_colors)]
-
-            # Define hover columns excluding the current label_col
-            hover_cols = [c for c in ['index', 'y_true', 'KMeans', 'novel_method'] if c != label_col and c in df_vis.columns]
+            hover_cols = [c for c in ['index', 'y_true', 'y_live', 'KMeans', 'novel_method'] if c != label_col and c in df_vis.columns]
 
             fig = px.scatter(
                 df_vis,
                 x='UMAP_1',
                 y='UMAP_2',
                 color=label_col,
-                color_discrete_map=color_map,
+                color_discrete_map=global_color_map,
                 category_orders={label_col: ordered_categories},
                 hover_name=None,
-                hover_data=hover_cols,  # list of columns to show on hover
+                hover_data=hover_cols,
                 title=f'UMAP projection colored by {label_col}',
                 width=1400,
                 height=900,
             )
 
-            # Add white edges to markers
+            # Add white borders
             for trace in fig.data:
                 trace.marker.line.color = 'white'
                 trace.marker.line.width = 1.5
@@ -601,46 +595,31 @@ for dataset_index in dataset_indices:
 
             fig.show()
 
-# %% ---- Combine the results from all datasets into a single DataFrame ----
+            # # Save to file
+            # save_file = os.path.join(Config.PLOT_SAVE_PATH, f"mnist_umap_{label_col}.png")
+            # fig.write_image(save_file, scale=2)  # scale=2 improves resolution
 
-metrics_plus_cols_to_keep = ['Algorithm', 'Dataset', 
-                            'Purity', 'V-Measure', 'NMI', 
-                            'ARI', 'FMI', 'Runtime (s)']
+# %% ---- Combine the results from all datasets into a single DataFrame ----
+            
+# specify the  columns to keep in the final DataFrame
+keep_columns = ['Algorithm', 'Dataset', 
+                    'Purity', 'V-Measure', 'NMI', 
+                    'ARI', 'FMI', 'Runtime (s)']
+
+# combine all the results and display from the results folder
 df_cr = combine_results(Config.RESULTS_FOLDER)
-df_cr = df_cr[[col for col in metrics_plus_cols_to_keep if col in df_cr.columns]]
+df_cr = df_cr[[col for col in keep_columns if col in df_cr.columns]]
 display(df_cr)
 
-# %% produce the tables with graded colouring
-import pandas as pd
+# process, build and save each of the metrics tables
+metric_dfs = process_df(df_cr)
+save_metric_tables_latex(metric_dfs, Config.TABLE_SAVE_PATH, use_colour=False)
 
-# Define metric columns to pivot
-metrics = ["Purity", "V-Measure", "NMI", "ARI", "FMI", "Runtime (s)"]
-
-# Remove '_with_class' suffix from Dataset column
-df_cr["Dataset"] = df_cr["Dataset"].str.replace("_with_class", "", regex=False)
-
-# Create a dictionary of DataFrames: one for each metric
-metric_dfs = {
-    metric: df_cr.pivot(index="Dataset", columns="Algorithm", values=metric)
-    for metric in metrics
-}
-
-# Apply styling with gradient colouring
-styled_dfs = {}
-
-for metric, metric_df in metric_dfs.items():
-    if metric == "Runtime (s)":
-        # Lower is better → reverse red colormap
-        styled = metric_df.style.background_gradient(cmap="Reds_r", axis=1)
-    else:
-        # Higher is better → green colormap
-        styled = metric_df.style.background_gradient(cmap="Greens", axis=1)
-
-    styled_dfs[metric] = styled
-    print(f"\n=== {metric} ===")
+# display each metric table with colour
+for metric, df in metric_dfs.items():
+    cmap = "Reds_r" if metric == "Runtime (s)" else "Greens"
+    styled = df.style.background_gradient(cmap=cmap, axis=1).set_caption(metric)
     display(styled)
-
-
 
     # %% Experiment code when exploring results for MNIST
     # import matplotlib.pyplot as plt
@@ -679,7 +658,5 @@ for metric, metric_df in metric_dfs.items():
     #     print("Index number:", index)
 
     # # Example usage
-    # show_mnist_image(df_vis, index=732)
+    # show_mnist_image(df_vis, index=150)
 
-
-    # %%
