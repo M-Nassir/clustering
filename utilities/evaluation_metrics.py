@@ -111,7 +111,7 @@ def evaluate_clustering_metrics(df, metrics_dict,
                         continue
                     score = func(df_filtered, pred_col=method, features=feature_columns)
                 
-                logging.debug("      Score for %s: %.4f", metric_name, score)
+                logging.info("      Score for %s: %.4f", metric_name, score)
                 row[metric_name] = score
 
             except Exception as e:
