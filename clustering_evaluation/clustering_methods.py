@@ -59,17 +59,13 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
     # --- Fit the clustering model ---
     clusterer.fit(features)
     cluster_labels = clusterer.labels_ if hasattr(clusterer, 'labels_') else clusterer.predict(features)
-    # logging.debug(f"Cluster labels before remapping: {np.unique(cluster_labels)}")
-    # logging.debug(f"target column unique values: {np.unique(df[target_column])}")
 
     # --- Remap labels using Hungarian method if requested ---
     if remap_labels and target_column in df.columns:
         labels = remap_clusters_hungarian_with_noise(cluster_labels, df[target_column].to_numpy())
-        # logging.debug(f"Remapped labels: {labels}")
     else:
         labels = cluster_labels
 
-    # logging.debug(f"Cluster labels after remapping: {np.unique(labels)}")
     return labels
 
 def kmeans_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
@@ -234,22 +230,6 @@ def novel_clustering(df, feature_columns, target_column='y_true', seeds='y_live'
 
     return df
 
-def novel_clustering2(df, feature_columns, target_column='y_true', seeds='y_live', remap_labels=False):
-    """
-    Perform clustering using novel clustering method and add a column to the DataFrame.
-
-    Returns:
-    - df (pd.DataFrame): DataFrame with predicted cluster labels.
-    """
-
-    # Select feature columns and 'y_live' for clustering input
-    num_d = df[feature_columns + [seeds]].to_numpy()
-
-    # Instantiate and cluster
-    novel_method2 = NovelClustering2()
-    df['novel_method2'] = novel_method2.fit(num_d)
-    return df
-
 # ----------------------------------- Deep Embedding Clustering (DEC) ------------------------
 def dec_clustering(df, feature_columns, num_clusters=3, 
                    pretrain_epochs=10, clustering_epochs=10, 
@@ -283,7 +263,7 @@ def run_and_time_clusterings(df, dataset_name, feature_columns, clustering_confi
                 runtimes[name] = None
                 continue
             
-            logging.debug("\n--> Running clustering method: %s", name)
+            logging.info("\n--> Running clustering method: %s", name)
             logging.debug("    Parameters: %s", config['params'])
             df_c = df.copy()
             start = time.time()
@@ -292,7 +272,7 @@ def run_and_time_clusterings(df, dataset_name, feature_columns, clustering_confi
                 df[name] = result[name]
                 elapsed = time.time() - start
                 runtimes[name] = elapsed
-                logging.debug("    Completed %s in %.4f seconds.", name, elapsed)
+                logging.info("    Completed %s in %.4f seconds.", name, elapsed)
             except Exception as e:
                 logging.warning("    ERROR while running %s: %s", name, e)
                 df[name] = -1  # fallback to invalid cluster id
