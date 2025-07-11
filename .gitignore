@@ -160,3 +160,4 @@ dcc/
 notebooks/results
 results/
 *.tex
+plots/
