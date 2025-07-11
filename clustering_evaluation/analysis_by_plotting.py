@@ -189,6 +189,11 @@ for metric in df_all["Metric"].unique():
         fig.write_image(str(file))
         print(f"Saved plot: {file}")
 
+        # Save interactive HTML
+        html_file = Config.PLOT_SAVE_PATH / f"{metric.lower()}_vs_points_per_cluster.html"
+        fig.write_html(str(html_file))
+        print(f"Saved interactive HTML: {html_file}")
+
 # %%
 # # ----------------------- Main Experiment Logic for Points per Cluster vs Clustering Metrics ------------------
 
