@@ -67,63 +67,102 @@ def compute_calinski_harabasz(df: pd.DataFrame, pred_col: str, features: List[st
         return -1.0
     return calinski_harabasz_score(df[features], df[pred_col])
 
-def evaluate_clustering_metrics(df, metrics_dict, 
-                                dataset_name, clustering_flags, feature_columns):
+import numpy as np
+import pandas as pd
+import logging
+
+def evaluate_clustering_metrics(
+    df,
+    metrics_dict,
+    dataset_name,
+    clustering_flags,
+    feature_columns,
+    all_results,        # dict {method_name: [labels_run1, labels_run2, ...]}
+    y_true_col='y_true',
+    outlier_label=-1
+):
     """
-    Evaluates all clustering metrics (supervised and unsupervised) and saves a unified table.
+    Evaluates clustering metrics averaged over multiple runs and returns a table with mean and std.
 
     Parameters:
-    - df (pd.DataFrame): DataFrame with clustering predictions and optionally ground truth in 'y_true'.
-    - dataset_name (str): Name of dataset for output naming.
-    - clustering_flags (dict): {method_name: bool} for enabled clustering methods.
-    - feature_columns (list): Feature columns used for unsupervised metrics.
+    - df (pd.DataFrame): Original DataFrame with features and ground truth 'y_true'.
+    - metrics_dict (list): List of (metric_name, func, requires_gt) tuples.
+    - dataset_name (str): Dataset name for results tagging.
+    - clustering_flags (dict): {method_name: bool} indicating enabled clustering methods.
+    - feature_columns (list): Feature column names used for unsupervised metrics.
+    - all_results (dict): {method_name: list of cluster label arrays from multiple runs}
+    - y_true_col (str): Name of the ground truth column.
+    - outlier_label (int): Label used to mark outliers or invalid clusters.
+
+    Returns:
+    - pd.DataFrame: Table with columns:
+      ['Algorithm', 'Dataset', metric1_mean, metric1_std, metric2_mean, metric2_std, ...]
     """
-    logging.info("\n=== Evaluating clustering metrics for dataset: %s ===", dataset_name)
-    
+
+    logging.info("\n=== Evaluating clustering metrics over multiple runs for dataset: %s ===", dataset_name)
+
     clustering_methods = [name for name, enabled in clustering_flags.items() if enabled]
     results = []
 
     for method in clustering_methods:
-        logging.debug("\n--> Processing method: %s", method)
-        row = {'Algorithm': method}
+        if method not in all_results:
+            logging.warning(f"Method '{method}' not found in all_results. Skipping.")
+            continue
+        
+        logging.debug(f"\n--> Processing method: {method}")
 
-        # Filter for outliers (only once per method)
-        df_filtered = df[(df['y_true'] != -1) & (df[method] != -1)]
-        logging.debug("Filter out outlier rows for method '%s': %d out of %d remaining", method, len(df_filtered), len(df))
+        metric_scores = {metric_name: [] for metric_name, _, _ in metrics_dict}
 
-        for metric_name, func, requires_gt in metrics_dict:
-            logging.debug("    - Computing metric: %s", metric_name)
-            try:
-                if requires_gt:
-                    if 'y_true' not in df.columns:
-                        logging.debug("      Skipping %s: 'y_true' column not found.", metric_name)
-                        row[metric_name] = None
-                        continue
-                    if df_filtered.empty:
-                        logging.debug("      Skipping %s: filtered data is empty.", metric_name)
-                        row[metric_name] = None
-                        continue
-                    score = func(df_filtered, true_col='y_true', pred_col=method)
-                else:
-                    if df_filtered.empty or df_filtered[method].nunique() < 2:
-                        logging.debug("      Skipping %s: not enough clusters or empty data.", metric_name)
-                        row[metric_name] = None
-                        continue
-                    score = func(df_filtered, pred_col=method, features=feature_columns)
-                
-                logging.info("      Score for %s: %.4f", metric_name, score)
-                row[metric_name] = score
+        for run_idx, run_labels in enumerate(all_results[method]):
+            # Assign cluster labels for this run
+            df_run = df.copy()
+            df_run[method] = run_labels
 
-            except Exception as e:
-                logging.debug("      Error computing %s for %s: %s", metric_name, method, e)
-                row[metric_name] = None
+            # Filter out outliers in ground truth and predicted clusters
+            df_filtered = df_run[
+                (df_run[y_true_col] != outlier_label) & (df_run[method] != outlier_label)
+            ]
+
+            for metric_name, func, requires_gt in metrics_dict:
+                try:
+                    if requires_gt:
+                        if y_true_col not in df_run.columns:
+                            logging.debug(f"Skipping {metric_name}: '{y_true_col}' not found.")
+                            score = None
+                        elif df_filtered.empty:
+                            logging.debug(f"Skipping {metric_name}: filtered data empty for run {run_idx}.")
+                            score = None
+                        else:
+                            score = func(df_filtered, true_col=y_true_col, pred_col=method)
+                    else:
+                        if df_filtered.empty or df_filtered[method].nunique() < 2:
+                            logging.debug(f"Skipping {metric_name}: not enough clusters or empty data in run {run_idx}.")
+                            score = None
+                        else:
+                            score = func(df_filtered, pred_col=method, features=feature_columns)
+                except Exception as e:
+                    logging.debug(f"Error computing {metric_name} for {method} run {run_idx}: {e}")
+                    score = None
+
+                if score is not None:
+                    metric_scores[metric_name].append(score)
+
+        # Aggregate metrics: mean and std dev
+        row = {'Algorithm': method, 'Dataset': dataset_name}
+        for metric_name in metric_scores:
+            scores = metric_scores[metric_name]
+            if scores:
+                row[f"{metric_name}"] = np.mean(scores)
+                # row[f"{metric_name}_std"] = np.std(scores)
+            else:
+                row[f"{metric_name}"] = None
+                # row[f"{metric_name}_std"] = None
 
         results.append(row)
 
-    metrics_df = pd.DataFrame(results).round(4)
-    metrics_df['Dataset'] = dataset_name
-
-    logging.info("\n=== Completed evaluation for dataset: %s ===\n", dataset_name)
+    metrics_df = pd.DataFrame(results)
+    logging.info(f"\n=== Completed multi-run evaluation for dataset: {dataset_name} ===\n")
     return metrics_df
+
 
 
