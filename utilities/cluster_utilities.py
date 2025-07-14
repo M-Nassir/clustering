@@ -132,4 +132,86 @@ def save_metric_tables_latex(metric_dfs, save_path, use_colour=False):
             df_styled = df_copy.style.format(precision=2)
             with open(latex_file, "w") as f:
                 f.write(df_styled.to_latex(hrules=True))
-    
+
+def metrics_to_dataframe(all_metrics):
+    """Flatten nested metrics structure into a DataFrame."""
+    records = [
+        {
+            "dataset": dataset_name,
+            "metric": metric,
+            "method": method,
+            "repeat": i + 1,
+            "value": value
+        }
+        for dataset_name, inner_dict in all_metrics.items()
+        for metric, methods in inner_dict[dataset_name].items()
+        for method, values in methods.items()
+        for i, value in enumerate(values)
+    ]
+    return pd.DataFrame(records)
+
+def average_metrics_dataframe(df):
+    """Compute average of each metric per method and dataset."""
+    return df.groupby(['dataset', 'metric', 'method'], as_index=False)['value'].mean()
+
+def escape_latex_underscores(text: str) -> str:
+    return text.replace('_', r'\_')
+
+def create_metric_tables_and_save_tex(df_avg, save_path):
+    """Create pivot tables per metric and save them as LaTeX files."""
+    import os
+
+    os.makedirs(save_path, exist_ok=True)
+    tables = {}
+
+    # Only include these methods in the final tables
+    methods_to_include = [
+        'KMeans',
+        'GMM',
+        'SeededKMeans',
+        'ConstrainedKMeans',
+        'COPKMeans',
+        'Agglomerative',
+        'novel_method',
+        'DBSCAN',
+        'DEC',
+    ]
+
+    method_name_map = {
+        'Agglomerative': 'Agg',
+        'SeededKMeans': 'S-KM',
+        'ConstrainedKMeans': 'C-KM',
+        'COPKMeans': 'COPKM',
+        'novel_method': 'Ours',
+    }
+
+    for metric, df_metric in df_avg.groupby('metric'):
+        df_metric = df_metric.copy()  # avoid modifying original
+
+        # Filter for selected methods before pivoting
+        df_metric = df_metric[df_metric['method'].isin(methods_to_include)]
+
+        pivot = df_metric.pivot(index='dataset', columns='method', values='value')
+
+        # Reorder columns: all except 'novel_method' first, then 'novel_method' last if present
+        cols = [m for m in methods_to_include if m in pivot.columns and m != 'novel_method']
+        if 'novel_method' in pivot.columns:
+            cols.append('novel_method')
+        pivot = pivot[cols]
+
+        # Rename methods for compact LaTeX columns
+        pivot.columns = [method_name_map.get(col, col) for col in pivot.columns]
+
+        # Escape underscores for LaTeX
+        pivot.index = pivot.index.map(escape_latex_underscores)
+        pivot.columns = [escape_latex_underscores(col) for col in pivot.columns]
+
+        # Save LaTeX version with NaNs shown as '--'
+        safe_name = metric.replace(' ', '_').replace('_', '-')
+        with open(os.path.join(save_path, f"{safe_name}.tex"), 'w') as f:
+            f.write(pivot.to_latex(float_format="%.2f", na_rep='--'))
+
+        tables[metric] = pivot
+
+    return tables
+

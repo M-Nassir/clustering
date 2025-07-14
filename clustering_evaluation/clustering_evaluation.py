@@ -1,6 +1,5 @@
 # %%
 # ---------------------------- Imports and Setup ----------------------------
-
 import os
 import sys
 import logging
@@ -9,7 +8,6 @@ import random
 import cProfile
 import pstats
 import io
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -21,121 +19,87 @@ CURRENT_DIR = Path(__file__).resolve().parent if "__file__" in globals() else Pa
 ROOT_PATH = CURRENT_DIR.parent
 sys.path.insert(0, str(ROOT_PATH))  
 
-# -------------------------- Internal Module Imports ------------------------
-
-# Dataset configuration and Clustering
-from dataset_config import dataset_dict
-from clustering_methods import (
-    kmeans_clustering, meanshift_clustering, dbscan_clustering,
-    agglomerative_clustering, gmm_clustering, spectral_clustering,
-    constrained_kmeans_clustering, copk_means_clustering, hdbscan_clustering, 
-    seeded_k_means_clustering, novel_clustering, dec_clustering,
-    run_and_time_clusterings
-)
-
-# Plotting Utilities
-from utilities.plotting import (
-    plot_clusters, plot_enabled_clusterings, 
-    plot_confusion_matrices_for_clustering
-)
-
-# Clustering Utilities
-from utilities.cluster_utilities import save_df, combine_results, process_df, save_metric_tables_latex
-from utilities.evaluation_metrics import (
-    compute_accuracy, compute_purity, compute_homogeneity, compute_ari,
-    compute_completeness, compute_v_measure, compute_nmi, compute_fmi,
-    compute_silhouette, compute_davies_bouldin, compute_calinski_harabasz,
-    evaluate_clustering_metrics
-)
+# Internal Module Imports 
+from evaluation_configs import dataset_dict, clustering_configs, clustering_flags, selected_metrics, skip_clustering
+from clustering_methods import run_metrics_time_clusterings
+from utilities.plotting import plot_clusters, plot_enabled_clusterings, plot_confusion_matrices_for_clustering
+from utilities.cluster_utilities import metrics_to_dataframe, average_metrics_dataframe, create_metric_tables_and_save_tex
 from utilities.generate_load_data import load_dataset
 
 # %%
 # -------------------------- Experiment Configuration ------------------------
-
 class Config:
     """Centralised configuration settings."""
-    PROFILE_CODE = False
-    IS_TESTING = False
-    RESULTS_FOLDER = Path("results")
-    PLOT_FIGURES = False
-    SAVE_RESULTS = False
-    SAVE_PLOTS = False
+    PROFILE_CODE = False # Enable to profile code execution time
+    IS_TESTING = False   # for producing more verbose output during development
+    PLOT_FIGURES = False # Enable to plot figures for each dataset
+    SAVE_RESULTS = True  # Save latex tables
+    SAVE_PLOTS = False   # Save plots to disk
+    RESULTS_FOLDER = Path("results") # Folder to save results
     PLOT_SAVE_PATH = Path.home() / "Google Drive/docs/A_computational_theory_of_clustering/figures"
     TABLE_SAVE_PATH = Path.home() / "Google Drive/docs/A_computational_theory_of_clustering/tables"
-    RANDOM_SEED = random.randint(0, 10_000) #4383  # For reproducibility
+    RANDOM_SEED = random.randint(0, 10_000)
 
 def setup_logging(is_testing: bool) -> logging.Logger:
-    """Initialise and return logger with level based on testing mode."""
-
-    if is_testing:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(levelname)s: %(message)s",
-            handlers=[logging.StreamHandler()]
-        )
-    else:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(levelname)s: %(message)s",
-            handlers=[logging.StreamHandler()]
-        )
-
-    # Suppress matplotlib font warnings
+    """Initialise logger with verbosity based on mode."""
+    logging.basicConfig(
+        level=logging.DEBUG if is_testing else logging.INFO,
+        format="%(levelname)s: %(message)s",
+        handlers=[logging.StreamHandler()]
+    )
     logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
-    logger = logging.getLogger("clustering")
-    return logger
+    return logging.getLogger("clustering")
 
-# Initialise project-wide logger
-my_logger = setup_logging(Config.IS_TESTING)
+# Initialise logger
+logger = setup_logging(Config.IS_TESTING)
 
 # -------------------------- Dataset Setup -----------------------------------
 
 # Set this to a specific dataset index to run only one dataset
 SINGLE_DATASET_INDEX = None
-
-# Determine which dataset(s) to process
 dataset_indices = [SINGLE_DATASET_INDEX] if SINGLE_DATASET_INDEX is not None else list(dataset_dict.keys())
+
+# holder for all metrics across datasets
+all_metrics = {}
 
 for dataset_index in dataset_indices:
     dataset_cfg = dataset_dict[dataset_index]
 
     # Resolve dataset parameters with fallbacks; default get is None
     dataset_name = dataset_cfg["name"]
-    random_seed = dataset_cfg.get("random_seed", Config.RANDOM_SEED)
+    random_seed = dataset_cfg["random_seed"] if dataset_cfg.get("random_seed") is not None else Config.RANDOM_SEED
     plot_figures_dataset_specific = dataset_cfg.get("plot_figure", Config.PLOT_FIGURES)
     k = dataset_cfg.get("k")
     percent_labelled = dataset_cfg.get("percent_labelled")
     standardise = dataset_cfg.get("standardise", False)
 
-    # -------------------------- Load Dataset ------------------------------------
-
-    my_logger.info(
-        f"Loading dataset '{dataset_name}' with parameters:\n"
-        f"  random_seed for this dataset = {random_seed}\n"
-        f"  k                            = {k}\n"
-        f"  percent_labelled             = {percent_labelled}\n"
-        f"  standardise                  = {standardise}"
-    )
-
+    # load the dataset for plotting purposes and obtaining dataset characteristics
     df, num_clusters, plot_title, feature_columns = load_dataset(
-        dataset_name,
-        random_seed,
-        k,
-        percent_labelled,
-        standardise,
+        dataset_name, random_seed, k, percent_labelled, standardise,
     )
 
-    my_logger.info(f"Dataset '{dataset_name}' loaded successfully.")
-    my_logger.info("  Number of seeds: %d", (df['y_live'] != -1).sum())
-    my_logger.info("  Number of examples: %d", df.shape[0])
-    my_logger.info("  Number of features: %d", len(feature_columns))
-    my_logger.debug("  Class distribution (y_live):\n%s", df['y_live'].value_counts())
-    my_logger.debug("  Class proportions (y_true, %%):\n%s", df['y_true'].value_counts(normalize=True).mul(100).round(2))
-    
-    # -------------------- Plot Dataset and Seeds Separately --------------------
+    # Save for later use
+    number_of_examples = df.shape[0]
+    number_of_seeds = (df['y_live'] != -1).sum()
+    number_of_features = len(feature_columns)
+
+    logger.info(
+        f"Loaded dataset '{dataset_name}' with parameters:\n"
+        f"  random_seed       = {random_seed}\n"
+        f"  k                 = {k}\n"
+        f"  percent_labelled  = {percent_labelled}\n"
+        f"  standardise       = {standardise}\n"
+        f"  Number of seeds   = {number_of_seeds}\n"
+        f"  Number of examples= {number_of_examples}\n"
+        f"  Number of features= {number_of_features}"
+    )
+
+    logger.debug("Class distribution (y_live):\n%s", df['y_live'].value_counts())
+
+    #  -------------------- Plot Dataset and Seeds Separately --------------------
 
     if Config.PLOT_FIGURES:
-        my_logger.info("Plotting dataset: %s", dataset_name)
+        logger.info("Plotting dataset: %s", dataset_name)
 
         # Plot with true labels
         fig1 = plot_clusters(
@@ -167,169 +131,31 @@ for dataset_index in dataset_indices:
             fig1.savefig(fig1_path, dpi=300, bbox_inches='tight')
             fig2.savefig(fig2_path, dpi=300, bbox_inches='tight')
 
-            my_logger.info("Saved plots to:\n- %s\n- %s", fig1_path, fig2_path)
+            logger.info("Saved plots to:\n- %s\n- %s", fig1_path, fig2_path)
 
-    # ---------------------------- Clustering Algorithm Setup and Execution ------------------------
-
-    # Flags to enable/disable specific clustering algorithms
-    clustering_flags = {
-        # Unsupervised clustering methods
-        'KMeans': True,
-        'MeanShift': True, #
-        'DBSCAN': True,
-        'HDBSCAN': True,
-        'Agglomerative': True, #
-        'GMM': True,
-        'Spectral': True, #
-
-        # Semi-supervised clustering methods
-        'ConstrainedKMeans': True,
-        'COPKMeans': True, #
-        'SeededKMeans': True,
-        'novel_method': True,
-
-        # Deep learning (self-)unsupervised clustering
-        'DEC': True,
-    }
-
-    # Configuration dictionary mapping method names to their functions and parameters
-    clustering_configs = {
-        'KMeans': {
-            'function': kmeans_clustering,
-            'params': {
-                'n_clusters': num_clusters,
-                'target_column': 'y_true',
-                'remap_labels': True,
-            }
-        },
-        'MeanShift': {
-            'function': meanshift_clustering,
-            'params': {
-                'target_column': 'y_true',
-                'remap_labels': True,
-            }
-        },
-        'DBSCAN': {
-            'function': dbscan_clustering,
-            'params': {
-                'target_column': 'y_true',
-                'remap_labels': True,
-            }
-        },
-        'HDBSCAN': {
-            'function': hdbscan_clustering,
-            'params': {
-                'target_column': 'y_true',
-                'min_cluster_size': 5,
-                'min_samples': None,
-                'remap_labels': True,
-            }
-        },
-        'Agglomerative': {
-            'function': agglomerative_clustering,
-            'params': {
-                'n_clusters': num_clusters,
-                'target_column': 'y_true',
-                'remap_labels': True,
-            }
-        },
-        'GMM': {
-            'function': gmm_clustering,
-            'params': {
-                'n_components': num_clusters,
-                'target_column': 'y_true',
-                'remap_labels': True,
-            }
-        },
-        'Spectral': {
-            'function': spectral_clustering,
-            'params': {
-                'n_clusters': num_clusters,
-                'target_column': 'y_true',
-                'remap_labels': True,
-            }
-        },
-        'ConstrainedKMeans': {
-            'function': constrained_kmeans_clustering,
-            'params': {
-                'n_clusters': num_clusters,
-                'target_column': 'y_true',
-                'size_min': 15,
-                'size_max': df.shape[0],
-                'remap_labels': True,
-            }
-        },
-        'COPKMeans': {
-            'function': copk_means_clustering,
-            'params': {
-                'num_clusters': num_clusters,
-                'target_column': 'y_true',
-                'label_column': 'y_live',
-                'remap_labels': True,
-            }
-        },
-        'SeededKMeans': {
-            'function': seeded_k_means_clustering,
-            'params': {
-                'n_clusters': num_clusters,
-                'target_column': 'y_true',
-                'seeds': 'y_live',
-                'remap_labels': True,
-            }
-        },
-        'novel_method': {
-            'function': novel_clustering,
-            'params': {
-                'target_column': 'y_true',
-                'seeds': 'y_live',
-                'remap_labels': False,  # No label remapping for novel method
-            }
-        },
-        'DEC': {
-            'function': dec_clustering,
-            'params': {
-                'num_clusters': num_clusters,
-                'pretrain_epochs': 10,      # Default: 100 (reduced here for quick runs)
-                'clustering_epochs': 10,    # Default: 150
-                'target_column': 'y_true',
-                'remap_labels': True,
-            }
-        },
-    }
-
-    # ---------------------------- Run Clustering Algorithms and Measure Runtime ------------------------
-
-    SKIP_CLUSTERING = { # these methods take too long on these datasets
-        "shuttle_trn_with_class": {
-            "MeanShift",
-            "Agglomerative",
-            "Spectral",
-            "COPKMeans"
-        },
-        "cover_type_with_class": {
-            "MeanShift",
-            "Agglomerative",
-            "Spectral",
-            "COPKMeans",
-            "DBSCAN",
-            "ConstrainedKMeans",
-        },
-    }
+    # -------------------- # Execute clustering algorithms based on the provided configurations and flags --------------------
+    logger.info("******* Preparing to apply clustering methods for dataset %s *******" % dataset_name)
 
     if Config.PROFILE_CODE:
         pr = cProfile.Profile()
         pr.enable()
-
-    # Execute clustering algorithms based on the provided configurations and flags
-    my_logger.info("******* Preparing to apply clustering methods for dataset %s *******" % dataset_name)
-    df, runtime_df = run_and_time_clusterings(
-        df,
-        dataset_name,
-        feature_columns,
-        clustering_configs,
-        clustering_flags,
-        SKIP_CLUSTERING,
+        
+    metrics_df, df_one_result = run_metrics_time_clusterings(
+        dataset_name = dataset_name,
+        random_seed = Config.RANDOM_SEED,
+        k = k,
+        percent_labelled = percent_labelled,
+        standardise = standardise,
+        clustering_configs = clustering_configs,
+        clustering_flags = clustering_flags,
+        skip_clusterings = skip_clustering,
+        num_repeats=10,
+        load_dataset=load_dataset,
+        selected_metrics=selected_metrics,
+        num_examples = number_of_examples,
     )
+    
+    all_metrics[dataset_name] = metrics_df
 
     if Config.PROFILE_CODE:
         pr.disable()
@@ -342,7 +168,7 @@ for dataset_index in dataset_indices:
         ps.print_stats(50)  # Show top 50 lines
         print(s.getvalue())
 
-    my_logger.info("******* Completed running clustering for dataset %s for all methods *******" % dataset_name)
+    logger.info("******* Completed running clustering and metrics for dataset %s for all methods *******" % dataset_name)
 
     # Plot results of enabled clustering algorithms if plotting is enabled
     if Config.IS_TESTING:
@@ -356,55 +182,19 @@ for dataset_index in dataset_indices:
                 save_plots=Config.SAVE_PLOTS,
             )
 
-    if Config.SAVE_RESULTS:
-        save_df(runtime_df, "runtime", dataset_name, Config.RESULTS_FOLDER)
-        
-    # ---------------------------- Metric Evaluation ------------------------
-
-    # Define all metrics as tuples: (metric_name, metric_function, requires_ground_truth)
-    all_metrics = [
-        # External metrics (require ground truth labels)
-        ('Accuracy', compute_accuracy, True),
-        ('Purity', compute_purity, True),
-        ('Homogeneity', compute_homogeneity, True),
-        ('Completeness', compute_completeness, True),
-        ('V-Measure', compute_v_measure, True),  # Equivalent to NMI here
-        ('NMI', compute_nmi, True),
-        ('ARI', compute_ari, True),
-        ('FMI', compute_fmi, True),
-
-        # Internal metrics (do NOT require ground truth labels)
-        # ('Silhouette Score', compute_silhouette, False),
-        # ('Davies-Bouldin Index', compute_davies_bouldin, False),
-        # ('Calinski-Harabasz Index', compute_calinski_harabasz, False),
-    ]
-
-    my_logger.info("Preparing to evaluate clustering metrics for all methods for dataset: %s", dataset_name)
-    df_metrics = evaluate_clustering_metrics(
-        df=df,
-        metrics_dict=all_metrics,
-        dataset_name=dataset_name,
-        clustering_flags=clustering_flags,
-        feature_columns=feature_columns,
-    )
-
-    my_logger.info("******* Completed running clustering metrics for all methods for dataset %s *******" % dataset_name)
-    
-    # Save the metrics DataFrame
-    if Config.SAVE_RESULTS:
-        save_df(df_metrics, "clustering_metrics", dataset_name, results_folder=Config.RESULTS_FOLDER)
-
     # ---------------------------- Plot Confusion Matrices ------------------------
     # Plot confusion matrices for all enabled clustering methods
-    # plot_confusion_matrices_for_clustering(
-    #     df, 
-    #     true_label_col='y_true', 
-    #     clustering_flags=clustering_flags
-    # )
+    if Config.IS_TESTING:
+        plot_confusion_matrices_for_clustering(
+            df, 
+            true_label_col='y_true', 
+            clustering_flags=clustering_flags
+        )
 
     # -- run only for MNIST and 6NewsgroupsUMAP10
 
-    if '6NewsgroupsUMAP10' in dataset_name:
+    if dataset_name == '6NewsgroupsUMAP10':
+
         # Define file path
         project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
         csv_file_path = os.path.join(project_root, "data", "processed", "6NewsgroupsUMAP2_embeddings.csv")
@@ -420,12 +210,19 @@ for dataset_index in dataset_indices:
         # Create a formatted email body column with line breaks every 10 words for hover display
         df_vis['email_body_formatted'] = df_vis['email_body'].apply(format_email_body)
 
-        # Merge clustering/class columns
-        for col in ['y_true', 'y_live', 'KMeans', 'novel_method']:
-            if col in df.columns:
-                df_vis[col] = df[col]
+        # Assign clustering results and labels from df_one_result dict
+        for col in ['KMeans', 'novel_method']:
+            if col in df_one_result:
+                # Assign y_true and y_live only once if not present
+                if 'y_true' not in df_vis:
+                    df_vis['y_true'] = df_one_result[col]['y_true']
+                if 'y_live' not in df_vis:
+                    df_vis['y_live'] = df_one_result[col]['y_live']
+
+                # Assign clustering results for this method
+                df_vis[col] = df_one_result[col][col]
             else:
-                raise KeyError(f"Column '{col}' not found in df")
+                raise KeyError(f"Column '{col}' not found in df_one_result")
 
         # Define a custom, high-contrast colour palette (20 colours)
         custom_colors = [
@@ -435,26 +232,38 @@ for dataset_index in dataset_indices:
             '#c7c7c7', '#dbdb8d', '#9edae5', '#393b79', '#637939'
         ]
 
-        # Create a color map with string keys to match label column type
-        color_map = {str(i): custom_colors[i % len(custom_colors)] for i in range(20)}
-        color_map['-1'] = 'rgb(255,0,0)'  # Red for -1 (e.g. anomaly or outlier)
+        # Build global color map across all label columns for consistency
+        label_columns = ['y_true', 'y_live', 'KMeans', 'novel_method']
+        all_labels = set()
+
+        for col in label_columns:
+            if col in df_vis:
+                all_labels.update(df_vis[col].astype(str).unique())
+
+        # Make sure '-1' (anomalies) is first and red
+        all_labels.discard('-1')
+        ordered_labels = ['-1'] + sorted(all_labels, key=int)
+
+        global_color_map = {
+            lbl: ('rgb(255,0,0)' if lbl == '-1' else custom_colors[i % len(custom_colors)])
+            for i, lbl in enumerate(ordered_labels)
+        }
 
         df_vis['index'] = df_vis.index.astype(str)
 
-        for label_col in ['y_true', 'y_live', 'KMeans', 'novel_method']:
+        for label_col in label_columns:
+            if label_col not in df_vis:
+                continue  # skip if column missing
+
             df_vis[label_col] = df_vis[label_col].astype(str)
 
-            # Create ordered categories starting with '-1' if present, then ascending numbers
-            unique_labels = sorted(set(df_vis[label_col]) - {'-1'}, key=int)
-            ordered_categories = ['-1'] + unique_labels if '-1' in df_vis[label_col].values else unique_labels
+            # Only keep labels present in this column, preserving order from global
+            ordered_categories = [lbl for lbl in ordered_labels if lbl in df_vis[label_col].values]
 
-            # Build color map only for labels in this column
-            color_map = {
-                lbl: ('rgb(255,0,0)' if lbl == '-1' else custom_colors[i % len(custom_colors)])
-                for i, lbl in enumerate(ordered_categories)
-            }
+            # Use subset of global color map for this column
+            color_map = {lbl: global_color_map[lbl] for lbl in ordered_categories}
 
-            # Define hover columns excluding current label_col but including relevant info
+            # Define hover columns, excluding current label_col
             hover_cols = [
                 col for col in ['index', 'y_true', 'y_live', 'KMeans', 'novel_method', 'category', 'top_keywords', 'email_body_formatted']
                 if col != label_col and col in df_vis.columns
@@ -498,9 +307,10 @@ for dataset_index in dataset_indices:
 
             fig.show()
 
+
     # -- run only for MNIST
 
-    if 'MNIST_UMAP10_with_class' in dataset_name:
+    if dataset_name == 'MNIST_UMAP10':
         logging.debug("Running UMAP visualization for MNIST dataset...")
 
         # Define save directory
@@ -513,12 +323,19 @@ for dataset_index in dataset_indices:
         # Load embeddings
         df_vis = pd.read_csv(csv_file_path)
 
-        # Merge clustering/class columns from df into df_vis
-        for col in ['y_true', 'y_live', 'KMeans', 'novel_method']:
-            if col in df.columns:
-                df_vis[col] = df[col].astype(str)
+        # Assign clustering results and labels from df_one_result dict
+        for col in ['KMeans', 'novel_method']:
+            if col in df_one_result:
+                # Assign y_true and y_live only once if not present
+                if 'y_true' not in df_vis:
+                    df_vis['y_true'] = df_one_result[col]['y_true']
+                if 'y_live' not in df_vis:
+                    df_vis['y_live'] = df_one_result[col]['y_live']
+
+                # Assign clustering results for this method
+                df_vis[col] = df_one_result[col][col]
             else:
-                raise KeyError(f"Column '{col}' not found in df")
+                raise KeyError(f"Column '{col}' not found in df_one_result")
 
         df_vis['index'] = df_vis.index.astype(str)
 
@@ -545,7 +362,6 @@ for dataset_index in dataset_indices:
             'pink', 'cyan', 'darkblue',
             'violet', 'magenta', 'black',
         ]
-
 
         global_color_map = {}
         for i, lbl in enumerate(ordered_categories):
@@ -595,32 +411,37 @@ for dataset_index in dataset_indices:
 
             fig.show()
 
-            # # Save to file
-            # save_file = os.path.join(Config.PLOT_SAVE_PATH, f"mnist_umap_{label_col}.png")
-            # fig.write_image(save_file, scale=2)  # scale=2 improves resolution
+            # Save to file
+            save_file = os.path.join(Config.PLOT_SAVE_PATH, f"mnist_umap_{label_col}.png")
+            fig.write_image(save_file, scale=2)  # scale=2 improves resolution
 
-# %% ---- Combine the results from all datasets into a single DataFrame ----
-            
-# specify the  columns to keep in the final DataFrame
-keep_columns = ['Algorithm', 'Dataset', 
-                    'Purity', 'V-Measure', 'NMI', 
-                    'ARI', 'FMI', 'Runtime (s)']
+# %% -------------------- Convert all metrics to a DataFrame for easier analysis --------------------
+metric_tables = {}
 
-# combine all the results and display from the results folder
-df_cr = combine_results(Config.RESULTS_FOLDER)
-df_cr = df_cr[[col for col in keep_columns if col in df_cr.columns]]
-display(df_cr)
+if Config.SAVE_RESULTS:
+    df_metrics = metrics_to_dataframe(all_metrics)
+    df_metrics["value"] = df_metrics["value"].round(2)
+    df_avg_metrics = average_metrics_dataframe(df_metrics)
+    metric_tables = create_metric_tables_and_save_tex(df_avg_metrics, Config.TABLE_SAVE_PATH)
 
-# process, build and save each of the metrics tables
-metric_dfs = process_df(df_cr)
-save_metric_tables_latex(metric_dfs, Config.TABLE_SAVE_PATH, use_colour=False)
+    for metric in metric_tables:
+        tex_path = Config.TABLE_SAVE_PATH / f"{metric}.tex"
+        logger.info("Saved LaTeX table for metric '%s' to %s", metric, tex_path)
 
-# display each metric table with colour
-for metric, df in metric_dfs.items():
-    cmap = "Reds_r" if metric == "Runtime (s)" else "Greens"
-    styled = df.style.background_gradient(cmap=cmap, axis=1).set_caption(metric)
+# Display styled tables with colours and '--' for missing
+for metric, df in metric_tables.items():
+    cmap = "Reds_r" if 'runtime (s)' in metric.lower() else "Greens"
+    formatter = lambda x: "--" if pd.isna(x) else f"{x:.2f}"
+
+    styled = (
+        df.style
+        .background_gradient(cmap=cmap, axis=1)
+        .format(formatter)
+        .set_caption(metric)
+    )
     display(styled)
 
+    
     # %% Experiment code when exploring results for MNIST
     # import matplotlib.pyplot as plt
     # import numpy as np

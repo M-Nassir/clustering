@@ -1,28 +1,17 @@
 # %%
-import numpy as np
 from clustering_methods import (
     kmeans_clustering, meanshift_clustering, dbscan_clustering,
     agglomerative_clustering, gmm_clustering, spectral_clustering,
     constrained_kmeans_clustering, copk_means_clustering, hdbscan_clustering, 
     seeded_k_means_clustering, novel_clustering, dec_clustering,
-    run_metrics_time_clusterings,
 )
 
-# Plotting Utilities
-from utilities.plotting import (
-    plot_clusters, plot_enabled_clusterings, 
-    plot_confusion_matrices_for_clustering
-)
-
-# Clustering Utilities
-from utilities.cluster_utilities import save_df, combine_results, process_df, save_metric_tables_latex
 from utilities.evaluation_metrics import (
     compute_accuracy, compute_purity, compute_homogeneity, compute_ari,
     compute_completeness, compute_v_measure, compute_nmi, compute_fmi,
     compute_silhouette, compute_davies_bouldin, compute_calinski_harabasz,
     evaluate_clustering_metrics
 )
-from utilities.generate_load_data import load_dataset
 
 def make_entry(name, percent_labelled, k, plot_figure=False, standardise=False, random_seed=None):
     return {
@@ -52,10 +41,10 @@ dataset_dict = {
         "yeast", 0.05, 4, plot_figure=False, standardise=False, random_seed=None), 
     10: make_entry(# 21, appears more than 2 clusters, unclear ground truth
         "banknote", 0.02, 2, plot_figure=False, standardise=False, random_seed=None), # 21
-    11: make_entry("pendigits", 0.05, 10, plot_figure=False, standardise=False, random_seed=None), # 769 
+    11: make_entry("pendigits", 0.025, 10, plot_figure=False, standardise=False, random_seed=None), # 769 
     12: make_entry("land_mines", 0.3, 5, plot_figure=False, standardise=False, random_seed=None),
     13: make_entry("MNIST_UMAP10", 0.05, 10, plot_figure=False, standardise=False, random_seed=None), # 4470
-    14: make_entry("6NewsgroupsUMAP10", 0.02, 10, plot_figure=False, standardise=False, random_seed=None),
+    14: make_entry("6NewsgroupsUMAP10", 0.02, 6, plot_figure=False, standardise=False, random_seed=None),
     15: make_entry( # highly imbalanced, one class dominates 78%, not good # 6435
         "shuttle", 0.01, 3, plot_figure=False, standardise=False, random_seed=None), #2196 
     16: make_entry("cover_type", percent_labelled=0.01, k=7, plot_figure=False, standardise=False, random_seed=None),
@@ -67,7 +56,7 @@ dataset_dict = {
 clustering_flags = {
     # Unsupervised clustering methods
     'KMeans': True,
-    'MeanShift': False, 
+    'MeanShift': True, 
     'DBSCAN': True,
     'HDBSCAN': True,
     'Agglomerative': True, 
@@ -184,13 +173,13 @@ clustering_configs = {
 # ---------------------------- Run Clustering Algorithms and Measure Runtime ------------------------
 
 skip_clustering = { # these methods take too long on these datasets
-    "shuttle_trn_with_class": {
+    "shuttle": {
         "MeanShift",
         "Agglomerative",
         "Spectral",
         "COPKMeans"
     },
-    "cover_type_with_class": {
+    "cover_type": {
         "MeanShift",
         "Agglomerative",
         "Spectral",

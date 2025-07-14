@@ -12,6 +12,7 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 from clustpy.deep import DEC
 import time
+from collections import defaultdict
 import logging
 
 def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
@@ -68,26 +69,26 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
 
     return labels
 
-def kmeans_clustering(df, feature_columns, target_column='y_true', n_clusters=3, 
+def kmeans_clustering(df, feature_columns, target_column='y_true',  n_clusters=None, 
                       random_state=0, remap_labels=False):
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state)
     df['KMeans'] = cluster_with_remapping(df, feature_columns, kmeans, target_column, remap_labels)
     return df
 
-def meanshift_clustering(df, feature_columns, target_column='y_true', bandwidth=None, 
+def meanshift_clustering(df, feature_columns,  n_clusters=None, target_column='y_true', bandwidth=None, 
                          remap_labels=False):
     bw = bandwidth or estimate_bandwidth(df[feature_columns].to_numpy(), quantile=0.2, n_samples=500)
     ms = MeanShift(bandwidth=bw, bin_seeding=True)
     df['MeanShift'] = cluster_with_remapping(df, feature_columns, ms, target_column, remap_labels)
     return df
 
-def dbscan_clustering(df, feature_columns, target_column='y_true', eps=0.5, min_samples=5, 
+def dbscan_clustering(df, feature_columns,  n_clusters=None,target_column='y_true', eps=0.5, min_samples=5, 
                       remap_labels=False):
     dbscan = DBSCAN(eps=eps, min_samples=min_samples)
     df['DBSCAN'] = cluster_with_remapping(df, feature_columns, dbscan, target_column, remap_labels)
     return df
 
-def hdbscan_clustering(df, feature_columns, target_column='y_true', min_cluster_size=5, 
+def hdbscan_clustering(df, feature_columns,  n_clusters=None, target_column='y_true', min_cluster_size=5, 
                        min_samples=None, remap_labels=False):
     hdb = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples)
     df['HDBSCAN'] = cluster_with_remapping(df, feature_columns, hdb, target_column, remap_labels)
@@ -100,8 +101,8 @@ def agglomerative_clustering(df, feature_columns, target_column='y_true', n_clus
                                                  target_column, remap_labels)
     return df
 
-def gmm_clustering(df, feature_columns, target_column='y_true', n_components=None, remap_labels=False):
-    gmm = GaussianMixture(n_components=n_components, random_state=0)
+def gmm_clustering(df, feature_columns,  n_clusters=None, target_column='y_true', remap_labels=False):
+    gmm = GaussianMixture(n_components=n_clusters, random_state=0)
     df['GMM'] = cluster_with_remapping(df, feature_columns, gmm, target_column, remap_labels)
     return df
 
@@ -160,14 +161,14 @@ def generate_constraints_from_labels(df, label_column='y_live'):
     return must_link, cannot_link
 
 def copk_means_clustering(df, feature_columns, target_column='y_true', label_column='y_live', 
-                          num_clusters=5, remap_labels=False):
+                           n_clusters=None, remap_labels=False):
     
     # Generate constraints based on the 'y_live' column (excluding -1 labels)
     must_link, cannot_link = generate_constraints_from_labels(df, label_column=label_column)
 
     # Perform COPK-means clustering
     clusters, centers = cop_kmeans(dataset=df[feature_columns].to_numpy(), 
-                                   k=num_clusters, ml=must_link, cl=cannot_link)
+                                   k=n_clusters, ml=must_link, cl=cannot_link)
     
     # If remapping is required, remap the clusters to match the most frequent ground-truth label
     if remap_labels and target_column in df.columns:
@@ -179,8 +180,8 @@ def copk_means_clustering(df, feature_columns, target_column='y_true', label_col
     return df
 
 # ----------------------------------- Seeded kmeans -----------------------------------
-def seeded_k_means_clustering(df, feature_columns, target_column='y_true', 
-                              seeds='y_live', n_clusters=3, random_state=0, 
+def seeded_k_means_clustering(df, feature_columns,  n_clusters=None, target_column='y_true', 
+                              seeds='y_live', random_state=0, 
                               remap_labels=False):
     """
     Perform KMeans clustering with predefined initial centroids 
@@ -213,7 +214,7 @@ def seeded_k_means_clustering(df, feature_columns, target_column='y_true',
     return df
 
 # ----------------------------------- Novel clustering method -----------------------------------
-def novel_clustering(df, feature_columns, target_column='y_true', seeds='y_live', remap_labels=False):
+def novel_clustering(df, feature_columns, n_clusters=None, target_column='y_true', seeds='y_live', remap_labels=False):
     """
     Perform clustering using novel clustering method and add a column to the DataFrame.
 
@@ -231,10 +232,10 @@ def novel_clustering(df, feature_columns, target_column='y_true', seeds='y_live'
     return df
 
 # ----------------------------------- Deep Embedding Clustering (DEC) ------------------------
-def dec_clustering(df, feature_columns, num_clusters=3, 
+def dec_clustering(df, feature_columns, n_clusters=None, 
                    pretrain_epochs=10, clustering_epochs=10, 
                    target_column='y_true', remap_labels=True):
-    dec = DEC(n_clusters=num_clusters, pretrain_epochs=pretrain_epochs, 
+    dec = DEC(n_clusters=n_clusters, pretrain_epochs=pretrain_epochs, 
               clustering_epochs=clustering_epochs)
     dec.fit(df[feature_columns].to_numpy())
 
@@ -249,41 +250,110 @@ def dec_clustering(df, feature_columns, num_clusters=3,
     return df
 
 # ----------------------------------- Run and time clusterings -----------------------------------
-
-def run_and_time_clusterings(df, dataset_name, feature_columns, clustering_configs, clustering_flags, skip_clusterings):
+def run_metrics_time_clusterings(
+    dataset_name,
+    clustering_configs,
+    clustering_flags,
+    skip_clusterings,
+    num_repeats=5,
+    load_dataset=None,          
+    random_seed=None,
+    k=None,
+    percent_labelled=None,
+    standardise=False,
+    selected_metrics=None,
+    num_examples=None,
+):
     logging.debug("\n=== Running clustering algorithms for dataset: %s ===", dataset_name)
-    
-    runtimes = {}
+
     skip_methods = skip_clusterings.get(dataset_name, set())
-    for name, config in clustering_configs.items():
-        if clustering_flags.get(name, False):
-            if name in skip_methods:
-                logging.debug("    Skipping clustering method %s for dataset %s due to skip configuration.", name, dataset_name)
-                df[name] = -1  # mark skipped methods with invalid cluster id
-                runtimes[name] = None
-                continue
-            
-            logging.info("\n--> Running clustering method: %s", name)
+    metrics_df = {}
+    last_results = {}  # to store final df_result for each method
+    metrics_accumulator = defaultdict(lambda: defaultdict(list))  # metrics[metric][method] = [s1, s2, ...]
+
+    # Define which methods to average (repeat)
+    methods_to_average = {'COPKmeans', 'ConstrainedKMeans', 'SeededKMeans', 'novel_method'}
+
+    for method_name, config in clustering_configs.items():
+        if not clustering_flags.get(method_name, False) or method_name in skip_methods:
+            logging.debug(
+                "    Skipping clustering method %s for dataset %s due to flag or skip configuration.",
+                method_name,
+                dataset_name,
+            )
+            continue
+
+        # Decide how many times to repeat
+        repeats = num_repeats if method_name in methods_to_average and dataset_name != 'cover_type' else 1
+
+        for repeat in range(repeats):
+            logging.info("\n--> Running clustering method: %s (Repeat %d/%d)", method_name, repeat + 1, repeats)
             logging.debug("    Parameters: %s", config['params'])
-            df_c = df.copy()
+
+            try:
+                df, _, _, feature_columns = load_dataset(
+                    dataset_name,
+                    random_seed + repeat,
+                    k,
+                    percent_labelled,
+                    standardise,
+                )
+            except Exception as e:
+                logging.warning("    Failed to load dataset on repeat %d: %s", repeat + 1, e)
+                continue
+
+            # Check for enough labels (only for methods using y_live)
+            labelled_counts = df[df['y_live'] != -1]['y_live'].value_counts().to_dict()
+            if any(count < 3 for count in labelled_counts.values()):
+                logging.warning("    Skipping repeat %d: Not enough seeds per cluster: %s", repeat + 1, labelled_counts)
+                continue
+
             start = time.time()
             try:
-                result = config['function'](df_c, feature_columns, **config['params'])
-                df[name] = result[name]
+                df_result = config['function'](df, feature_columns, n_clusters=k, **config['params'])
                 elapsed = time.time() - start
-                runtimes[name] = elapsed
-                logging.info("    Completed %s in %.4f seconds.", name, elapsed)
+                metrics_accumulator['runtime (s)'][method_name].append(elapsed)
+
+                # Store last result of this method
+                last_results[method_name] = pd.DataFrame({
+                    'y_true': df['y_true'],
+                    'y_live': df['y_live'],
+                    method_name: df_result[method_name]
+                }).copy()
+
+
+                for metric_name, metric_info in selected_metrics.items():
+                    metric_fn = metric_info["fn"]
+                    requires_gt = metric_info["requires_gt"]
+
+                    try:
+                        if requires_gt:
+                            df_filtered = df_result[(df_result['y_true'] != -1) & (df_result[method_name] != -1)]
+                            score = metric_fn(df_filtered, 'y_true', method_name)
+                        else:
+                            df_filtered = df_result[df_result[method_name] != -1]
+                            score = metric_fn(df_filtered[feature_columns], method_name, feature_columns)
+
+                        metrics_accumulator[metric_name][method_name].append(score)
+
+                    except Exception as metric_err:
+                        logging.warning("    Metric %s failed on %s (repeat %d): %s",
+                                        metric_name, method_name, repeat + 1, metric_err)
+
             except Exception as e:
-                logging.warning("    ERROR while running %s: %s", name, e)
-                df[name] = -1  # fallback to invalid cluster id
-                runtimes[name] = None
+                logging.warning("    ERROR while running %s on repeat %d: %s", method_name, repeat + 1, e)
+                continue
 
-    # Convert runtimes dict to DataFrame with dataset name
-    runtime_df = pd.DataFrame([
-        {"Algorithm": algo, "Runtime (s)": rt, "Dataset": dataset_name}
-        for algo, rt in runtimes.items()
-    ])
+    # Attach results to the metrics_df dictionary under the dataset_name
+    metrics_df[dataset_name] = metrics_accumulator
 
-    logging.debug("\n=== Finished all clusterings for %s ===\n", dataset_name)
-    return df, runtime_df
+    return metrics_df, last_results
+
+
+
+
+
+    
+
+
 
