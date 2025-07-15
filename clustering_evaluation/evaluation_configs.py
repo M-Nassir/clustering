@@ -30,10 +30,10 @@ def make_entry(name, percent_labelled, k, plot_figure=False, standardise=False, 
 dataset_dict = {
     # 0: make_entry("1d_simple", 0.03, 3, plot_figure=False, standardise=False, random_seed=None),
     1: make_entry("1d_gauss", 0.002, 3, plot_figure=False, standardise=False, random_seed=None),
-    2: make_entry("2d_gauss", 0.006, 6, plot_figure=True, standardise=False, random_seed=6772), # 4549 6628 743 8858 6772
+    2: make_entry("2d_gauss", 0.01, 8, plot_figure=True, standardise=False, random_seed=6772), # 4549 6628 743 8858 6772
     3: make_entry("iris", 0.2, 3, plot_figure=False, standardise=False, random_seed=None), # 8338 3480 9093
     4: make_entry("wine", 0.3, 3, plot_figure=False, standardise=False, random_seed=None), # 3169 9942
-    5: make_entry("breast_cancer", 0.09, 2, plot_figure=False, standardise=False, random_seed=None), # 1451
+    5: make_entry("breast_cancer", 0.07, 2, plot_figure=False, standardise=False, random_seed=None), # 1451
     6: make_entry("seeds", 0.2, 3, plot_figure=False, standardise=False, random_seed=None), # 8993
     7: make_entry("glass", 0.3, 6, plot_figure=False, standardise=False, random_seed=None), # 1986
     8: make_entry( "ionosphere_UMAP10", 0.1, 2, plot_figure=False, standardise=False, random_seed=None), # 4574
@@ -44,10 +44,10 @@ dataset_dict = {
     11: make_entry("pendigits", 0.025, 10, plot_figure=False, standardise=False, random_seed=None), # 769 
     12: make_entry("land_mines", 0.3, 5, plot_figure=False, standardise=False, random_seed=None),
     13: make_entry("MNIST_UMAP10", 0.05, 10, plot_figure=False, standardise=False, random_seed=None), # 4470
-    14: make_entry("6NewsgroupsUMAP10", 0.02, 6, plot_figure=False, standardise=False, random_seed=None),
+    14: make_entry("6NewsgroupsUMAP10", 0.01, 6, plot_figure=False, standardise=False, random_seed=None),
     15: make_entry( # highly imbalanced, one class dominates 78%, not good # 6435
-        "shuttle", 0.01, 3, plot_figure=False, standardise=False, random_seed=None), #2196 
-    16: make_entry("cover_type", percent_labelled=0.01, k=7, plot_figure=False, standardise=False, random_seed=None),
+        "shuttle", 0.002, 3, plot_figure=False, standardise=False, random_seed=None), #2196 
+    16: make_entry("cover_type", percent_labelled=2e-4, k=7, plot_figure=False, standardise=False, random_seed=None),
 }
 
 # ---------------------------- Clustering Algorithm Setup and Execution ------------------------
