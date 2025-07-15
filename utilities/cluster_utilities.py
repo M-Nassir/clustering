@@ -154,6 +154,9 @@ def average_metrics_dataframe(df):
     """Compute average of each metric per method and dataset."""
     return df.groupby(['dataset', 'metric', 'method'], as_index=False)['value'].mean()
 
+def median_metrics_dataframe(df):
+    return df.groupby(['dataset', 'metric', 'method'], as_index=False)['value'].median()
+
 def escape_latex_underscores(text: str) -> str:
     return text.replace('_', r'\_')
 
@@ -182,7 +185,7 @@ def create_metric_tables_and_save_tex(df_avg, save_path):
         'SeededKMeans': 'S-KM',
         'ConstrainedKMeans': 'C-KM',
         'COPKMeans': 'COPKM',
-        'novel_method': 'Ours',
+        'novel_method': 'Proposed',
     }
 
     for metric, df_metric in df_avg.groupby('metric'):
