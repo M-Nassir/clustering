@@ -284,7 +284,7 @@ def run_metrics_time_clusterings(
             continue
 
         # Decide how many times to repeat
-        repeats = num_repeats if method_name in methods_to_average and dataset_name != 'cover_type' else 1
+        repeats = num_repeats if method_name in methods_to_average and dataset_name != 'cover_type' else 3
 
         for repeat in range(repeats):
             logging.info("\n--> Running clustering method: %s (Repeat %d/%d)", method_name, repeat + 1, repeats)

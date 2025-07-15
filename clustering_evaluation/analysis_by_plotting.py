@@ -32,7 +32,7 @@ class Config:
     RESULTS_FOLDER = Path("results")
     PLOT_FIGURES = False
     SAVE_RESULTS = False
-    SAVE_PLOTS = False
+    SAVE_PLOTS = True
     PLOT_SAVE_PATH = Path.home() / "Google Drive/docs/A_computational_theory_of_clustering/figures"
     RANDOM_SEED = random.randint(0, 10_000) 
 
@@ -73,9 +73,9 @@ metric_functions = {
 # ----------------------- Main Experiment Logic for Points per Cluster vs Clustering Metrics (using actual number of points) ------------------
 
 points_per_cluster_list = [5, 10, 
-                           15, 20, 25, 30, 35, 40, 45, 50
+                           15, 20, 25, 30, 
+                           35, 40, 45, 50,
                            ]
-num_repeats = 10
 results = []
 
 for dataset_cfg in dataset_dict.values():
@@ -85,9 +85,10 @@ for dataset_cfg in dataset_dict.values():
     standardise = dataset_cfg.get("standardise", False)
 
     if dataset_name == "cover_type":
-        my_logger.warning("Skipping 'cover_type' dataset due to large size.")
-        continue
-    
+        num_repeats = 3
+    else:
+        num_repeats = 10
+            
     my_logger.info(f"Loading dataset '{dataset_name}' with random_seed={random_seed}")
     
     # Load once to get number of total points
@@ -185,12 +186,12 @@ for metric in df_all["Metric"].unique():
     fig.show()
 
     if Config.SAVE_PLOTS:
-        file = Config.PLOT_SAVE_PATH / f"{metric.lower()}_vs_points_per_cluster.png"
+        file = Config.PLOT_SAVE_PATH / f"{metric.lower()}_vs_points_per_cluster_all.png"
         fig.write_image(str(file))
         print(f"Saved plot: {file}")
 
         # Save interactive HTML
-        html_file = Config.PLOT_SAVE_PATH / f"{metric.lower()}_vs_points_per_cluster.html"
+        html_file = Config.PLOT_SAVE_PATH / f"{metric.lower()}_vs_points_per_cluster_all.html"
         fig.write_html(str(html_file))
         print(f"Saved interactive HTML: {html_file}")
 
