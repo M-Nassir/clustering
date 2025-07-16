@@ -25,8 +25,8 @@ from evaluation.evaluation_configs import dataset_dict, clustering_configs, clus
 from evaluation.clustering_methods import run_metrics_time_clusterings
 from utilities.plotting import plot_clusters, plot_enabled_clusterings, plot_confusion_matrices_for_clustering
 from utilities.cluster_utilities import (
-    metrics_to_dataframe, average_metrics_dataframe, create_metric_tables_and_save_tex,
-    median_metrics_dataframe
+    metrics_to_dataframe, average_metrics_dataframe, save_metric_tables_as_latex,
+    median_metrics_dataframe, create_metric_tables
 )
 from utilities.generate_load_data import load_dataset
 
@@ -419,25 +419,11 @@ for dataset_index in dataset_indices:
             fig.write_image(save_file, scale=2)  # scale=2 improves resolution
 
 # %% -------------------- Convert all metrics to a DataFrame for easier analysis --------------------
-metric_tables = {}
-
-if Config.SAVE_RESULTS:
-    df_metrics = metrics_to_dataframe(all_metrics)
-    df_metrics["value"] = df_metrics["value"].round(2)
-
-    # Use median metrics
-    df_median_metrics = median_metrics_dataframe(df_metrics)
-    metric_tables = create_metric_tables_and_save_tex(df_median_metrics, Config.TABLE_SAVE_PATH)
-
-# Display styled tables and save raw dataframes
-for metric, df in metric_tables.items():
-    # Choose colour map
-    cmap = "Reds_r" if 'runtime (s)' in metric.lower() else "Greens"
-    
-    # Format values for display
+def display_and_save_metric_table(metric: str, df: pd.DataFrame):
+    """Display a styled metric table and optionally save it as CSV."""
+    cmap = "Reds_r" if "runtime (s)" in metric.lower() else "Greens"
     formatter = lambda x: "--" if pd.isna(x) else f"{x:.2f}"
 
-    # Display styled table
     styled = (
         df.style
         .background_gradient(cmap=cmap, axis=1)
@@ -447,12 +433,33 @@ for metric, df in metric_tables.items():
     display(styled)
 
     if Config.SAVE_RESULTS:
-        # Save each dataframe as CSV
-        filename = metric.lower().replace(" ", "_").replace("(", "").replace(")", "") + ".csv"
-        df.to_csv(os.path.join(Config.RESULTS_FOLDER, filename), index=True)
+        # Safe filename: lowercase, no spaces/parentheses
+        safe_filename = (
+            metric.lower()
+            .replace(" ", "_")
+            .replace("(", "")
+            .replace(")", "")
+        ) + ".csv"
+        df.to_csv(os.path.join(Config.RESULTS_FOLDER, safe_filename), index=True)
+        
+# %% -------------------- Convert all metrics to a DataFrame for easier analysis --------------------
+metric_tables = {}
+df_metrics = metrics_to_dataframe(all_metrics)
+df_metrics["value"] = df_metrics["value"].round(2)
+
+# Use median metrics
+df_median_metrics = median_metrics_dataframe(df_metrics)
+metric_tables = create_metric_tables(df_median_metrics)
 
 if Config.SAVE_RESULTS:
-    # Save entire metric_tables dictionary
+    save_metric_tables_as_latex(metric_tables, Config.TABLE_SAVE_PATH)
+
+# Loop through and display/save
+for metric, df in metric_tables.items():
+    display_and_save_metric_table(metric, df)
+
+# %% -------------------- Optionally save entire metric_tables dict --------------------
+if Config.SAVE_RESULTS:
     with open(os.path.join(Config.RESULTS_FOLDER, "metric_tables.pkl"), "wb") as f:
         pickle.dump(metric_tables, f)
 
