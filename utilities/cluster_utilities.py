@@ -114,25 +114,6 @@ def process_df(df_cr):
 
     return metric_dfs
 
-def save_metric_tables_latex(metric_dfs, save_path, use_colour=False):
-    os.makedirs(save_path, exist_ok=True)
-
-    for metric, df in metric_dfs.items():
-        latex_file = os.path.join(save_path, f"{metric.replace(' ', '_')}.tex")
-
-        # Replace NaNs with '--' in all cases first
-        df_copy = df.fillna('--')
-
-        if use_colour:
-            cmap = "Reds_r" if metric == "Runtime (s)" else "Greens"
-            styled = df_copy.style.background_gradient(cmap=cmap, axis=1).set_caption(metric)
-            with open(latex_file, "w") as f:
-                f.write(styled.to_latex(hrules=True))
-        else:
-            df_styled = df_copy.style.format(precision=2)
-            with open(latex_file, "w") as f:
-                f.write(df_styled.to_latex(hrules=True))
-
 def metrics_to_dataframe(all_metrics):
     """Flatten nested metrics structure into a DataFrame."""
     records = [
@@ -160,14 +141,10 @@ def median_metrics_dataframe(df):
 def escape_latex_underscores(text: str) -> str:
     return text.replace('_', r'\_')
 
-def create_metric_tables_and_save_tex(df_avg, save_path):
-    """Create pivot tables per metric and save them as LaTeX files."""
-    import os
-
-    os.makedirs(save_path, exist_ok=True)
+def create_metric_tables(df_avg):
+    """Create pivot tables per metric."""
     tables = {}
 
-    # Only include these methods in the final tables
     methods_to_include = [
         'KMeans',
         'GMM',
@@ -189,32 +166,31 @@ def create_metric_tables_and_save_tex(df_avg, save_path):
     }
 
     for metric, df_metric in df_avg.groupby('metric'):
-        df_metric = df_metric.copy()  # avoid modifying original
-
-        # Filter for selected methods before pivoting
+        df_metric = df_metric.copy()
         df_metric = df_metric[df_metric['method'].isin(methods_to_include)]
 
         pivot = df_metric.pivot(index='dataset', columns='method', values='value')
 
-        # Reorder columns: all except 'novel_method' first, then 'novel_method' last if present
         cols = [m for m in methods_to_include if m in pivot.columns and m != 'novel_method']
         if 'novel_method' in pivot.columns:
             cols.append('novel_method')
         pivot = pivot[cols]
 
-        # Rename methods for compact LaTeX columns
         pivot.columns = [method_name_map.get(col, col) for col in pivot.columns]
 
-        # Escape underscores for LaTeX
         pivot.index = pivot.index.map(escape_latex_underscores)
         pivot.columns = [escape_latex_underscores(col) for col in pivot.columns]
-
-        # Save LaTeX version with NaNs shown as '--'
-        safe_name = metric.replace(' ', '_').replace('_', '-')
-        with open(os.path.join(save_path, f"{safe_name}.tex"), 'w') as f:
-            f.write(pivot.to_latex(float_format="%.2f", na_rep='--'))
 
         tables[metric] = pivot
 
     return tables
 
+def save_metric_tables_as_latex(tables, save_path):
+    """Save pivot tables as LaTeX files."""
+    os.makedirs(save_path, exist_ok=True)
+
+    for metric, pivot in tables.items():
+        safe_name = metric.replace(' ', '_').replace('_', '-')
+        file_path = os.path.join(save_path, f"{safe_name}.tex")
+        with open(file_path, 'w') as f:
+            f.write(pivot.to_latex(float_format="%.2f", na_rep='--'))
