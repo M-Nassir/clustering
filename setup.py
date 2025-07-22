@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="clustering-nassir",  # PyPI name (can have dashes)
-    version="0.1.0",
+    version="0.1.1",
     author="Nassir Mohammad",
     author_email="drnassirmohammad@gmail.com",
     description="A semi-supervised clustering method using anomaly detection",
