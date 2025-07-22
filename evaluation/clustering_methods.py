@@ -7,7 +7,7 @@ from sklearn.cluster import SpectralClustering
 from k_means_constrained import KMeansConstrained
 from copkmeans.cop_kmeans import cop_kmeans
 import hdbscan
-from clustering_nassir.cluster import NovelClustering
+from clustering_nassir.cluster import SemiSupervisedClusterer
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 from clustpy.deep import DEC
@@ -226,7 +226,7 @@ def novel_clustering(df, feature_columns, n_clusters=None, target_column='y_true
     num_d = df[feature_columns + [seeds]].to_numpy()
 
     # Instantiate and cluster
-    novel_method = NovelClustering()
+    novel_method = SemiSupervisedClusterer()
     df['novel_method'] = novel_method.fit(num_d)
 
     return df

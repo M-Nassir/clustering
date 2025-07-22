@@ -17,7 +17,7 @@ ROOT_PATH = CURRENT_DIR.parent
 sys.path.insert(0, str(ROOT_PATH))
 
 # Internal Imports
-from clustering_nassir.cluster import NovelClustering
+from clustering_nassir.cluster import SemiSupervisedClusterer
 from evaluation_configs import dataset_dict
 from utilities.evaluation_metrics import compute_purity, compute_ari, compute_v_measure, compute_nmi, compute_fmi
 from utilities.generate_load_data import load_dataset

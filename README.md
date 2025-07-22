@@ -27,6 +27,6 @@ pip install clustering_nassir
 
 ```bash
 pip install clustering_nassir
-from clustering_nassir import NovelClustering
+from clustering_nassir import SemiSupervisedClusterer
 ```
 

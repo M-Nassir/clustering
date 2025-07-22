@@ -1,4 +1,4 @@
-from .cluster import NovelClustering
+from .cluster import SemiSupervisedClusterer
 
-__all__ = ['NovelClustering']
+__all__ = ['SemiSupervisedClusterer']
 

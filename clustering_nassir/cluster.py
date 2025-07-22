@@ -1,7 +1,7 @@
 import numpy as np
 from perception_nassir import Perception
 
-class NovelClustering:
+class SemiSupervisedClusterer:
     """
     A semi-supervised clustering algorithm based on anomaly detection.
 
