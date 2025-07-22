@@ -34,6 +34,6 @@ data = df[["feature1", "feature2", "feature3", "y_live"]].to_numpy()
 
 # Fit the model
 model = SemiSupervisedClusterer()
-df["result"] = model.fit(data)
+df["clustering_result"] = model.fit(data)
 ```
 
