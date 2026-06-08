@@ -1,3 +1,31 @@
+"""
+Configuration for clustering experiments.
+
+This file is the central place to decide which datasets, clustering methods,
+method parameters, and evaluation metrics are used by the evaluation scripts
+and notebooks. It intentionally contains very little execution logic: the main
+runner imports these dictionaries and passes them into
+`run_metrics_time_clusterings`.
+
+Main objects:
+    dataset_dict:
+        Dataset name, number of clusters, seed-label percentage, and any
+        dataset-specific options.
+    clustering_flags:
+        Global on/off switches for each clustering method.
+    clustering_configs:
+        Maps each method name to the function that runs it plus default
+        parameters for that method.
+    skip_clustering:
+        Dataset-specific exclusions for methods that are too slow, too memory
+        intensive, or not suitable for a particular dataset.
+    selected_metrics:
+        Metrics that will be computed for each method output.
+
+If you are returning to the project, start here to see what the experiment is
+currently set up to run.
+"""
+
 from evaluation.clustering_methods import (
     agglomerative_clustering,
     constrained_kmeans_clustering,
@@ -25,6 +53,7 @@ from utilities.evaluation_metrics import (
 
 
 def _dataset(name, percent_labelled, k, plot_figure=False, standardise=False, random_seed=None):
+    """Package one dataset's experiment settings into the standard config shape."""
     return {
         "name": name,
         "percent_labelled": percent_labelled,
@@ -36,14 +65,16 @@ def _dataset(name, percent_labelled, k, plot_figure=False, standardise=False, ra
 
 
 def _method(function, **params):
+    """Package a clustering function with the keyword arguments it should receive."""
     return {
         "function": function,
         "params": params,
     }
 
 
-# Datasets are pre-processed so the final column is the integer-encoded class label
-# and all preceding columns are named features.
+# Dataset configs are keyed by integer IDs so notebooks can run one dataset by
+# setting SINGLE_DATASET_INDEX. `load_dataset` is responsible for turning these
+# names/options into a DataFrame, feature columns, and labels.
 dataset_dict = {
     # 0: _dataset("1d_simple", 0.03, 3),
     1: _dataset("1d_gauss", 0.002, 3),
@@ -59,12 +90,13 @@ dataset_dict = {
     11: _dataset("pendigits", 0.025, 10),  # 769
     12: _dataset("land_mines", 0.3, 5),
     13: _dataset("MNIST_UMAP10", 0.10, 10),  # 4470
-    14: _dataset("6NewsgroupsUMAP10", 0.02, 6),
+    14: _dataset("6NewsgroupsUMAP10", 0.031, 6),  # about 30 seeds/class for 5,881 rows
     15: _dataset("shuttle", 0.002, 3),  # highly imbalanced, one class dominates
     16: _dataset("cover_type", 2e-4, 7),
 }
 
-
+# Global method switches. A method only runs when its flag is True and it is not
+# also listed in `skip_clustering` for the current dataset.
 clustering_flags = {
     "KMeans": True,
     "MeanShift": False,
@@ -86,6 +118,10 @@ _REMAP_TO_TRUE = {
     "remap_labels": True,
 }
 
+# Each entry becomes a runtime config like:
+# {"function": kmeans_clustering, "params": {"target_column": "y_true", ...}}
+# The runner later calls:
+# config["function"](df, feature_columns, n_clusters=k, **config["params"]).
 clustering_configs = {
     "KMeans": _method(kmeans_clustering, **_REMAP_TO_TRUE),
     "MeanShift": _method(meanshift_clustering, **_REMAP_TO_TRUE),
@@ -129,7 +165,8 @@ clustering_configs = {
     ),
 }
 
-
+# Some methods are impractical for specific datasets. For example, large
+# datasets can make pairwise or constrained methods too slow or memory-heavy.
 skip_clustering = {
     "shuttle": {
         "MeanShift",
@@ -147,7 +184,8 @@ skip_clustering = {
     },
 }
 
-
+# Metric functions receive either true/predicted label columns or feature data,
+# depending on `requires_gt`. The current set all compare predictions to y_true.
 selected_metrics = {
     "Accuracy": {"fn": compute_accuracy, "requires_gt": True},
     "Purity": {"fn": compute_purity, "requires_gt": True},

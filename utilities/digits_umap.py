@@ -1,3 +1,16 @@
+"""
+Build UMAP-based processed datasets from sklearn's handwritten digits data.
+
+Running this script creates two processed CSV files:
+    - MNIST_UMAP10_with_class.csv: 10D embedding used by clustering experiments
+    - MNIST_UMAP2_with_images.csv: 2D embedding plus image pixels for Plotly
+      inspection/hover visualizations
+
+Despite the filename used in the project config, this script uses
+`sklearn.datasets.load_digits`, the smaller 8x8 handwritten digit dataset.
+It is a dataset-preparation script, not part of the main evaluation loop.
+"""
+
 # %%
 # -----------------------------------------------------------------------
 # Setup
@@ -31,7 +44,7 @@ print(f"Loaded MNIST digits dataset with shape {X.shape} and labels shape {y.sha
 
 # %%
 # -----------------------------------------------------------------------
-# UMAP embedding: 10 dimensions for downstream tasks
+# UMAP embedding: 10 dimensions for downstream clustering tasks.
 # -----------------------------------------------------------------------
 
 reducer_10d = umap.UMAP(n_components=10, metric='euclidean', random_state=42)
@@ -39,7 +52,7 @@ embedding_10d = reducer_10d.fit_transform(X)
 
 # %%
 # -----------------------------------------------------------------------
-# UMAP embedding: 2D for visualization
+# UMAP embedding: 2D for visualization-only plots.
 # -----------------------------------------------------------------------
 
 reducer_2d = umap.UMAP(n_components=2, metric='euclidean', random_state=42)
@@ -63,7 +76,7 @@ df_vis = pd.DataFrame({
     'image_pixels': [img.tolist() for img in X]
 })
 
-# Also save the 10D embeddings and labels for downstream use
+# Also save the 10D embeddings and labels for downstream clustering use.
 df_10d = pd.DataFrame(embedding_10d, columns=[f'UMAP_{i+1}' for i in range(embedding_10d.shape[1])])
 df_10d['class'] = y
 
@@ -93,4 +106,3 @@ sns.scatterplot(x='UMAP_1', y='UMAP_2', hue='class', palette='tab10', data=df_vi
 plt.title('UMAP 2D projection of MNIST digits')
 plt.gca().set_aspect('equal', 'datalim')
 plt.show()
-

@@ -1,3 +1,20 @@
+"""
+Main clustering evaluation runner.
+
+This script loads each configured dataset, runs the enabled clustering methods,
+collects repeated-run metrics and runtimes, and converts the results into
+summary tables. It uses the method and dataset definitions from
+`evaluation.evaluation_configs` and delegates the actual clustering/evaluation
+loop to `run_metrics_time_clusterings` in `evaluation.clustering_methods`.
+
+Use `Config` to control profiling, plotting, and whether tables or figures are
+saved. Set `SINGLE_DATASET_INDEX` when you want a quick single-dataset run
+instead of evaluating every dataset in `dataset_dict`.
+
+If you are new to this file, read the imports/configuration first, then the
+"Run Experiment" loop near the bottom, and finally the output-table cell.
+"""
+
 # %%
 # ---------------------------- Imports and Setup ----------------------------
 import sys
@@ -72,6 +89,7 @@ PAPER_DATASET_ORDER = [
 
 
 def plot_dataset_overview(dataset_name, df, feature_columns):
+    """Optionally plot true labels and available seed labels for one dataset."""
     if not Config.PLOT_FIGURES:
         return
 
@@ -115,6 +133,7 @@ def run_optional_visualizations(
     feature_columns,
     plot_figures_dataset_specific,
 ):
+    """Create diagnostic plots after clustering has run for a dataset."""
     if Config.IS_TESTING and plot_figures_dataset_specific:
         plot_enabled_clusterings(
             df,
@@ -142,12 +161,15 @@ def run_optional_visualizations(
 
 
 def build_output_tables(all_metrics):
+    """Convert nested repeated-run metric output into publication-style tables."""
     df_metrics = metrics_to_dataframe(all_metrics)
     if df_metrics.empty:
         return {}
 
     df_metrics["value"] = df_metrics["value"].round(4)
 
+    # Medians are used so repeated runs are summarized robustly before table
+    # formatting and dataset ordering are applied.
     dataset_order = PAPER_DATASET_ORDER
     df_median_metrics = median_metrics_dataframe(df_metrics)
 
@@ -180,6 +202,7 @@ def get_rebuttal_tables(tables):
 
 
 def save_output_tables(tables, save_pickle=True):
+    """Save table outputs as CSV, LaTeX, and optionally one pickle bundle."""
     if not tables:
         return
 
@@ -213,7 +236,7 @@ logger = setup_logging(Config.IS_TESTING)
 
 # -------------------------- Run Experiment -----------------------------------
 
-# Set this to a specific dataset index to run only one dataset
+# Set this to a specific dataset index to run only one dataset while debugging.
 SINGLE_DATASET_INDEX = None
 dataset_indices = [SINGLE_DATASET_INDEX] if SINGLE_DATASET_INDEX is not None else list(dataset_dict.keys())
 
@@ -223,7 +246,8 @@ all_metrics = {}
 for dataset_index in dataset_indices:
     dataset_cfg = dataset_dict[dataset_index]
 
-    # Resolve dataset parameters with fallbacks; default get is None
+    # Resolve dataset parameters from evaluation_configs. When a dataset does
+    # not pin a random seed, use this run's Config.RANDOM_SEED.
     dataset_name = dataset_cfg["name"]
     random_seed = dataset_cfg["random_seed"] if dataset_cfg.get("random_seed") is not None else Config.RANDOM_SEED
     plot_figures_dataset_specific = dataset_cfg.get("plot_figure", Config.PLOT_FIGURES)
@@ -231,7 +255,8 @@ for dataset_index in dataset_indices:
     percent_labelled = dataset_cfg.get("percent_labelled")
     standardise = dataset_cfg.get("standardise", False)
 
-    # load the dataset for plotting purposes and obtaining dataset characteristics
+    # Load once here for logging/plots. The clustering runner reloads per repeat
+    # so each repeat can use a different seed and labelled subset.
     df, num_clusters, plot_title, feature_columns = load_dataset(
         dataset_name, random_seed, k, percent_labelled, standardise,
     )
@@ -262,7 +287,8 @@ for dataset_index in dataset_indices:
 
     profiler = start_profiler(Config.PROFILE_CODE)
 
-    # Returns nested metric lists by dataset and one representative result frame per method for plotting.
+    # Returns nested metric lists by dataset and one representative result frame
+    # per method for plotting/inspection.
     metrics_by_dataset, result_frames_by_method = run_metrics_time_clusterings(
         dataset_name = dataset_name,
         random_seed = Config.RANDOM_SEED,

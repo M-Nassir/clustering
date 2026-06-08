@@ -1,3 +1,19 @@
+"""
+Dataset generation, loading, and seed-label assignment utilities.
+
+The evaluation scripts call `load_dataset` to get a DataFrame in the standard
+project shape:
+    feature columns..., y_true, y_live
+
+`y_true` is the ground-truth class/cluster label. `y_live` is the partial
+seed-label column used by semi-supervised methods, with -1 meaning "unlabelled".
+This module handles both synthetic datasets generated on the fly and processed
+CSV datasets stored under `data/processed`.
+
+If you are new to this file, start with `load_dataset` at the bottom. It is the
+public entry point used by the notebooks and evaluation runners.
+"""
+
 # %% imports
 import numpy as np
 import pandas as pd
@@ -51,6 +67,7 @@ def _log_label_summary(df):
 
 
 def _assign_random_live_labels(df, percent_labelled):
+    """Mark a random fraction of rows as labelled by copying y_true into y_live."""
     df['y_live'] = -1
     mask = np.random.choice(
         np.arange(len(df)),
@@ -61,6 +78,7 @@ def _assign_random_live_labels(df, percent_labelled):
 
 
 def _assign_balanced_live_labels(df, labelled_fraction, rng=None):
+    """Assign seed labels as evenly as possible across true classes."""
     df['y_live'] = -1
     true_classes = df[df['y_true'] >= 0]['y_true'].unique()
     labelled_total = int(labelled_fraction * len(df))
@@ -83,6 +101,7 @@ def _make_plot_title(dataset_name, histogram_overlay=False):
 
 
 def _get_feature_columns(df):
+    """Return the columns used as clustering features."""
     return [col for col in df.columns if col not in set(_LABEL_COLUMNS)]
 
 
@@ -326,6 +345,7 @@ def generate_clustering_2d_gauss_data(
 
 
 def prepare_and_seed_dataset(dataset_name, percent_labelled, k, random_seed, label_column):
+    """Load a processed CSV dataset and create its balanced `y_live` seed labels."""
     # Read data from the processed folder CSV
     project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
     csv_file_path = os.path.join(project_root, "data", "processed", f"{dataset_name}.csv")
@@ -351,6 +371,7 @@ def prepare_and_seed_dataset(dataset_name, percent_labelled, k, random_seed, lab
 
 
 def _load_generated_dataset(dataset_name, random_seed, k, percent_labelled):
+    """Dispatch synthetic dataset names to their generator functions."""
     if dataset_name == "1d_simple":
         df = generate_clustering_1d_data(
             repeat_const=100,
@@ -404,6 +425,8 @@ def load_dataset(dataset_name, random_seed, k, percent_labelled, standardise):
             - plot_title (str): A title for plotting.
             - feature_columns (list): A list of column names that are features.
     """
+    # Synthetic datasets are generated fresh for each repeat. Real datasets are
+    # loaded from preprocessed CSV files and then re-seeded for the repeat.
     if dataset_name in {"1d_simple", "1d_gauss", "2d_gauss"}:
         df, num_clusters, plot_title = _load_generated_dataset(
             dataset_name,
@@ -421,6 +444,8 @@ def load_dataset(dataset_name, random_seed, k, percent_labelled, standardise):
         )
         plot_title = _make_plot_title(dataset_name)
 
+    # All downstream clustering methods receive this feature list rather than
+    # inferring columns themselves, so label columns cannot leak into clustering.
     feature_columns = _get_feature_columns(df)
     if standardise:
         _standardise_features(df, feature_columns, dataset_name)

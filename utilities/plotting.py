@@ -1,3 +1,16 @@
+"""
+Plotting helpers for clustering datasets and clustering outputs.
+
+This module supports two kinds of visual checks:
+    - generic scatter/histogram plots for any loaded dataset or method output
+    - special Plotly views for precomputed 2D UMAP versions of MNIST and
+      6Newsgroups, where hover text/images make cluster inspection easier
+
+The evaluation runners call these functions only when plotting flags are
+enabled. They are meant for diagnostics and paper figures, not for core metric
+calculation.
+"""
+
 import os
 
 import matplotlib.pyplot as plt
@@ -56,6 +69,7 @@ _MNIST_COLORS = [
 
 
 def _resolve_colors(labels, colors=None):
+    """Build a color map that always gives noise label -1 a visible color."""
     color_map = dict(_BASE_LABEL_COLORS)
     if colors is not None:
         color_map.update(colors)
@@ -76,6 +90,7 @@ def _resolve_colors(labels, colors=None):
 
 
 def _project_features(df, feature_columns):
+    """Return 1D/2D features directly, or reduce higher-dimensional data with UMAP."""
     if not feature_columns:
         raise ValueError("Error: feature_columns must contain at least 1 column")
 
@@ -120,6 +135,7 @@ def _format_email_body(text, words_per_line=10):
 
 
 def _merge_visualisation_results(df_vis, df_one_result, label_columns):
+    """Attach latest clustering result columns to a precomputed visualization frame."""
     for label_column in label_columns:
         if label_column in {"y_true", "y_live"}:
             continue
@@ -192,6 +208,7 @@ def plot_embedding_label_views(
     plot_save_path=None,
     save_plots=False,
 ):
+    """Plot special 2D UMAP inspection views for text and MNIST datasets."""
     if dataset_name == "6NewsgroupsUMAP10":
         csv_file_path = os.path.join(project_root, "data", "processed", "6NewsgroupsUMAP2_embeddings.csv")
         df_vis = pd.read_csv(csv_file_path)
@@ -352,6 +369,7 @@ def plot_enabled_clusterings(
     dataset_name=None,
     save_plots=False,
 ):
+    """Plot every enabled clustering result column found in a DataFrame."""
     for name, enabled in clustering_flags.items():
         if not enabled:
             continue

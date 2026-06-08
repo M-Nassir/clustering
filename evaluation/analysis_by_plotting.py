@@ -1,3 +1,21 @@
+"""
+Plot-based analysis for the semi-supervised clustering method.
+
+This script is an exploratory analysis companion to the main clustering
+evaluation notebook. The active experiment varies the number of labelled seed
+points per cluster for each dataset, runs `SemiSupervisedClusterer`, computes
+external clustering metrics against `y_true`, and plots how each metric changes
+as more seed labels are provided.
+
+Typical outputs are Plotly line charts, optionally saved as PNG and HTML files
+under `Config.PLOT_SAVE_PATH`. The lower half of the file contains older
+commented-out experiments for related checks such as percentage-labelled sweeps,
+label-noise sweeps, and quick single-dataset sanity tests.
+
+If you are new to this file, start with `Config`, then read the active
+"points per cluster" loop and the plotting block immediately after it.
+"""
+
 # %%
 # ---------------------------- Imports and Setup ----------------------------
 import sys
@@ -60,7 +78,8 @@ def setup_logging(is_testing: bool) -> logging.Logger:
 # Initialise project-wide logger
 my_logger = setup_logging(Config.IS_TESTING)
 
-# Define metrics to compute
+# Metrics plotted for the novel/semi-supervised method. These all compare the
+# predicted `novel_method` labels with the ground-truth `y_true` labels.
 metric_functions = {
     "Purity": compute_purity,
     "NMI": compute_nmi,
@@ -72,6 +91,9 @@ metric_functions = {
 # %% Loop over points per cluster directly
 # ----------------------- Main Experiment Logic for Points per Cluster vs Clustering Metrics (using actual number of points) ------------------
 
+# Each value means "try to provide about this many labelled seed points for
+# every true cluster". The code converts it to the percentage expected by
+# load_dataset for each dataset size.
 points_per_cluster_list = [5, 10, 
                            15, 20, 25, 30, 
                            35, 40, 45, 50,
@@ -84,6 +106,7 @@ for dataset_cfg in dataset_dict.values():
     random_seed = Config.RANDOM_SEED
     standardise = dataset_cfg.get("standardise", False)
 
+    # cover_type is much larger than the other datasets, so keep repeats lower.
     if dataset_name == "cover_type":
         num_repeats = 3
     else:
@@ -91,7 +114,8 @@ for dataset_cfg in dataset_dict.values():
             
     my_logger.info(f"Loading dataset '{dataset_name}' with random_seed={random_seed}")
     
-    # Load once to get number of total points
+    # Load once to get the dataset size. The active experiment is controlled by
+    # points per cluster, but load_dataset accepts a proportion labelled.
     df_tmp, _, _, _ = load_dataset(
         dataset_name,
         random_seed,
@@ -106,6 +130,8 @@ for dataset_cfg in dataset_dict.values():
         metrics_accumulator = defaultdict(list)
 
         for repeat in range(num_repeats):
+            # Convert the requested seed count into the proportion expected by
+            # load_dataset: total labelled points divided by dataset size.
             total_labelled = target_points_per_cluster * k
             proportion_labelled = total_labelled / num_total_points
 
@@ -122,9 +148,13 @@ for dataset_cfg in dataset_dict.values():
 
             labelled_counts = df[df['y_live'] != -1]['y_live'].value_counts().to_dict()
             if any(count < 3 for count in labelled_counts.values()):
+                # The semi-supervised method needs a few seeds per class to
+                # infer meaningful constraints; otherwise this repeat is noisy.
                 my_logger.warning(f"Skipping: Not enough seeds per cluster: {labelled_counts}")
                 continue
 
+            # The last column passed into the clusterer is y_live, where -1
+            # marks unlabelled points and non-negative values are seed labels.
             clf = SemiSupervisedClusterer()
             df["novel_method"] = clf.fit(df[feature_columns + ['y_live']].to_numpy())
             df_filtered = df[(df['y_true'] != -1) & (df['novel_method'] != -1)]
@@ -156,7 +186,8 @@ for dataset_cfg in dataset_dict.values():
 
         my_logger.info(f"Processed dataset '{dataset_name}' with {target_points_per_cluster} pts/cluster.")
 
-# Convert to DataFrame
+# Convert the long-form results into a DataFrame that Plotly can group by
+# metric and dataset.
 df_all = pd.DataFrame(results)
 
 # ------------------------ Plotting ------------------------
@@ -515,6 +546,4 @@ for metric in df_all["Metric"].unique():
 # df_filtered = df[(df['y_true'] != -1) & (df['novel_method'] != -1)]
 # purity = compute_purity(df_filtered, "novel_method", "y_true")
 # print(f"Purity after randomly reassigning 10% seed labels: {purity:.4f}")
-
-
 

@@ -1,3 +1,11 @@
+"""
+Small runtime helpers shared by notebooks and evaluation scripts.
+
+`setup_logging` gives the project a consistent logger, while `start_profiler`
+and `finish_profiler` wrap optional cProfile timing around expensive clustering
+experiment runs.
+"""
+
 import cProfile
 import io
 import logging

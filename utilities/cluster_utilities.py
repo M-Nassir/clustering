@@ -1,7 +1,16 @@
 """
-Created on Mon Feb  6 13:05:33 2023
+Table, formatting, and result-conversion utilities for clustering experiments.
 
-@author: nassirmohammad
+The evaluation runner produces nested dictionaries of repeated metric values.
+This module turns those raw structures into DataFrames, pivot tables, CSV files,
+and LaTeX tables. It also contains display helpers for notebooks and older
+result-combination utilities.
+
+If you are new to this file, the most important flow is:
+    metrics_to_dataframe -> median_metrics_dataframe -> create_metric_tables
+
+The "full dataset" table helpers are used for rebuttal/paper-style summaries
+that include rejected/noise predictions from the proposed method.
 """
 import os
 import logging
@@ -28,7 +37,7 @@ METHOD_NAME_MAP = {
     'novel_method': 'Proposed',
 }
 
-# Define save_df helper
+# Simple CSV output helper used by older scripts.
 def save_df(df, filename_prefix, dataset_name, results_folder):
     filename = os.path.join(results_folder, f"{filename_prefix}_{dataset_name}.csv")
     df.to_csv(filename, index=False)
@@ -88,6 +97,7 @@ def display_and_save_table(table_name, df, display_fn, save_results=False, resul
         save_table_csv(table_name, df, results_folder)
 
 def combine_results(results_folder="results"):
+    """Combine older per-dataset metric/runtime CSV outputs into one table."""
     runtime_files = []
     metrics_files = []
 
@@ -143,6 +153,7 @@ def escape_latex(s):
              .replace('^', '\\textasciicircum{}'))
 
 def process_df(df_cr):
+    """Convert a combined result table into LaTeX-friendly per-metric pivots."""
     # round values
     df_cr = df_cr.round(2)
 
@@ -190,6 +201,9 @@ def process_df(df_cr):
 
 def metrics_to_dataframe(all_metrics):
     """Flatten nested metrics structure into a DataFrame."""
+    # all_metrics has the shape:
+    # {dataset -> {dataset -> {metric -> {method -> [repeat values]}}}}
+    # This long-form table is easier to aggregate and pivot later.
     records = [
         {
             "dataset": dataset_name,
@@ -210,6 +224,7 @@ def average_metrics_dataframe(df):
     return df.groupby(['dataset', 'metric', 'method'], as_index=False)['value'].mean()
 
 def median_metrics_dataframe(df):
+    """Compute median of each metric per method and dataset."""
     return df.groupby(['dataset', 'metric', 'method'], as_index=False)['value'].median()
 
 def escape_latex_underscores(text: str) -> str:
@@ -233,6 +248,7 @@ def _dataset_sizes_from_metrics(df_avg):
     return {dataset: int(round(size)) for dataset, size in dataset_sizes.items() if pd.notna(size)}
 
 def _pivot_metric(df_avg, metric_name, methods_to_include=None, dataset_order=None):
+    """Build one dataset-by-method table for a single metric."""
     df_metric = df_avg[df_avg['metric'] == metric_name].copy()
     if methods_to_include is not None:
         df_metric = df_metric[df_metric['method'].isin(methods_to_include)]

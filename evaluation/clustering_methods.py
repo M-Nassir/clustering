@@ -44,9 +44,12 @@ from utilities.evaluation_metrics import evaluate_prediction_scopes
 
 
 def remap_clusters_hungarian_with_noise(y_pred, y_true, noise_label=-1):
+    """Align arbitrary cluster IDs to ground-truth labels for metric readability."""
     y_pred = np.asarray(y_pred)
     y_true = np.asarray(y_true)
 
+    # Clustering algorithms choose their own label numbers. The Hungarian
+    # assignment finds the label mapping that maximizes agreement with y_true.
     all_labels = np.unique(np.concatenate([np.unique(y_true), np.unique(y_pred)]))
     cm = confusion_matrix(y_true, y_pred, labels=all_labels)
     row_ind, col_ind = linear_sum_assignment(-cm)
@@ -69,6 +72,8 @@ def cluster_with_remapping(df, feature_columns, clusterer, target_column='y_true
     if remap_labels and target_column not in df.columns:
         raise ValueError(f"Target column '{target_column}' not found in DataFrame.")
 
+    # All sklearn-style wrappers come through here: fit on feature columns,
+    # read labels from `.labels_` when available, otherwise call `predict`.
     features = df[feature_columns].to_numpy()
     clusterer.fit(features)
     labels = clusterer.labels_ if hasattr(clusterer, 'labels_') else clusterer.predict(features)
@@ -136,6 +141,8 @@ def constrained_kmeans_clustering(df, feature_columns, target_column='y_true',
                                   random_state=0, remap_labels=False):
     n_samples = df[feature_columns].shape[0]
     if size_min is None or size_max is None:
+        # Keep cluster sizes roughly balanced when the caller has not supplied
+        # explicit bounds.
         avg_size = n_samples / n_clusters
         size_min = size_min or max(int(avg_size * 0.5), 1)
         size_max = size_max or int(avg_size * 1.5)
@@ -150,13 +157,16 @@ def constrained_kmeans_clustering(df, feature_columns, target_column='y_true',
 
 
 def generate_constraints_from_labels(df, label_column='y_live'):
+    """Convert known seed labels into COP-KMeans must-link/cannot-link pairs."""
     must_link = []
     cannot_link = []
     grouped = df[df[label_column] != -1].groupby(label_column)
 
+    # Same seed label means the pair should be kept together.
     for _, group in grouped:
         must_link.extend(combinations(group.index, 2))
 
+    # Different seed labels mean the pair should be kept apart.
     labels = list(grouped.groups.keys())
     for idx, left_label in enumerate(labels):
         for right_label in labels[idx + 1:]:
@@ -261,6 +271,8 @@ def _append_selected_metrics(metrics_accumulator, selected_metrics, method_name,
 
         try:
             if requires_gt:
+                # Most external clustering metrics compare y_true to a method's
+                # predicted labels, ignoring outliers/noise marked as -1.
                 df_filtered = df_result[(df_result['y_true'] != -1) & (df_result[method_name] != -1)]
                 score = metric_fn(df_filtered, 'y_true', method_name)
             else:
@@ -274,6 +286,8 @@ def _append_selected_metrics(metrics_accumulator, selected_metrics, method_name,
 
 def _append_full_scope_metrics(metrics_accumulator, selected_metrics, method_name, df_result, feature_columns):
     try:
+        # Full-scope metrics preserve information about rejected/noise points,
+        # instead of only scoring retained predictions.
         evaluation_scores = evaluate_prediction_scopes(
             df=df_result,
             metrics_dict=selected_metrics,
@@ -324,6 +338,8 @@ def _load_repeat_dataset(load_dataset, dataset_name, random_seed, repeat, k, per
 
 def _run_method_once(config, df, feature_columns, k):
     start = time.time()
+    # `config` comes from evaluation_configs._method and contains the callable
+    # plus method-specific params such as remap_labels, seeds, or min_samples.
     df_result = config['function'](df, feature_columns, n_clusters=k, **config['params'])
     return df_result, time.time() - start
 
@@ -382,6 +398,8 @@ def run_metrics_time_clusterings(
     result_frames_by_method = {}
     metrics_accumulator = defaultdict(lambda: defaultdict(list))
 
+    # These methods depend on seed sampling or constraints, so repeated dataset
+    # loads give a more stable estimate than a single run.
     methods_to_average = {'COPKmeans', 'ConstrainedKMeans', 'SeededKMeans', 'novel_method'}
 
     for method_name, config in clustering_configs.items():
@@ -410,6 +428,8 @@ def run_metrics_time_clusterings(
 
             enough_seeds, labelled_counts = _has_enough_seeds(df)
             if not enough_seeds:
+                # The semi-supervised methods need enough labelled examples per
+                # class to build constraints or seed centroids reliably.
                 logging.warning("    Skipping repeat %d: Not enough seeds per cluster: %s", repeat + 1, labelled_counts)
                 continue
 

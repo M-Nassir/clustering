@@ -1,3 +1,16 @@
+"""
+Metric functions used to evaluate clustering outputs.
+
+The clustering runners use these helpers in two ways:
+    1. External/supervised metrics compare predicted cluster labels to `y_true`.
+    2. Internal/unsupervised metrics score the geometry of predicted clusters
+       using feature columns only.
+
+The project treats -1 as an outlier/noise/unlabelled prediction. Some metrics
+are computed on the retained subset only, while `evaluate_prediction_scopes`
+also reports full-dataset scores and rejection statistics.
+"""
+
 # %% imports
 from typing import Dict, List
 import logging
@@ -17,6 +30,8 @@ from sklearn.metrics import (
     v_measure_score,
 )
 # ---------------------------- Supervised metrics -----------------------------------
+# These require ground-truth labels. They are used for benchmark comparisons,
+# not by the clustering algorithms themselves.
 def compute_accuracy(df, true_col, pred_col):
     if df.empty:
         return 0.0
@@ -61,6 +76,8 @@ def compute_fmi(df, true_col, pred_col):
     return fowlkes_mallows_score(df[true_col], df[pred_col])
 
 # --------------------------- Unsupervised metrics ---------------------------
+# These use only feature geometry and predicted cluster labels. They require at
+# least two predicted clusters, so they return -1.0 when the score is undefined.
 def compute_silhouette(df: pd.DataFrame, pred_col: str, features: List[str]) -> float:
     if df.empty or df[pred_col].nunique() < 2:
         return -1.0
@@ -107,6 +124,7 @@ def _compute_metric_for_scope(
     feature_columns: List[str],
     true_col: str = "y_true",
 ):
+    """Call one metric function with the right argument shape for its type."""
     if requires_gt:
         if true_col not in df_scope.columns or pred_col not in df_scope.columns or df_scope.empty:
             return None
@@ -131,6 +149,8 @@ def evaluate_prediction_scopes(
 
     The returned dict is flat so it can be added directly to experiment rows/tables.
     """
+    # "Retained" matches the original evaluation style: drop true outliers and
+    # rejected predictions. "Full" keeps all rows so rejection behavior is seen.
     retained_df = get_retained_subset(df, pred_col=pred_col, true_col=true_col, outlier_label=outlier_label)
     results = compute_rejection_stats(df, pred_col=pred_col, outlier_label=outlier_label)
 

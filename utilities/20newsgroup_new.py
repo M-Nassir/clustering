@@ -1,4 +1,17 @@
 # -*- coding: utf-8 -*-
+"""
+Prepare 20 Newsgroups text data for clustering experiments and visualization.
+
+Running this script downloads/selects a subset of the 20 Newsgroups corpus,
+lemmatizes the text, builds TF-IDF features, reduces those features with UMAP,
+and writes two processed CSV files:
+    - 6NewsgroupsUMAP10_with_class.csv: 10D embedding used for clustering
+    - 6NewsgroupsUMAP2_embeddings.csv: 2D embedding with category, keywords,
+      and email body text for Plotly hover inspection
+
+This is a dataset-building script. It depends on external NLTK/sklearn data
+downloads and should be run deliberately when regenerating processed text data.
+"""
 
 # %%
 # -----------------------------------------------------------------------
@@ -49,6 +62,8 @@ path_to_save_fig = os.path.expanduser('~/Google Drive/docs/A_computational_theor
 # %%
 # -----------------------------------------------------------------------
 # Load the data
+# The paper subset uses six categories, giving a smaller text benchmark with
+# clearer labels than the full 20-class corpus.
 # -----------------------------------------------------------------------
 
 categories_test = [
@@ -92,6 +107,8 @@ for idx, cat in enumerate(fetched_data.target_names):
 # %%
 # -----------------------------------------------------------------------
 # Text pre-processing: Lemmatization
+# NLTK resources are downloaded here because this script is intended to be run
+# as a standalone data-preparation step.
 # -----------------------------------------------------------------------
 
 nltk.download('punkt')
@@ -108,6 +125,8 @@ lemmatized_docs = [lemmatize_text(doc) for doc in fetched_data.data]
 # %%
 # -----------------------------------------------------------------------
 # TF-IDF vectorization
+# TF-IDF converts variable-length documents into sparse numeric features that
+# UMAP can reduce for clustering.
 # -----------------------------------------------------------------------
 
 vectorizer = TfidfVectorizer(strip_accents='unicode', stop_words='english', min_df=5)
@@ -140,7 +159,7 @@ top_keywords_list = [get_top_n_keywords(tfidf_X[i], feature_names, n=10) for i i
 # Dimension reduction with UMAP and visualization
 # -----------------------------------------------------------------------
 
-# UMAP embedding to 10 dimensions (for later downstream tasks)
+# UMAP embedding to 10 dimensions for downstream clustering tasks.
 reducer = umap.UMAP(n_components=10, metric='cosine') # , random_state=42
 embedding = reducer.fit_transform(tfidf_X)
 
@@ -160,7 +179,7 @@ plt.gca().set_aspect('equal', 'datalim')
 plt.show()
 
 # %%
-# UMAP embedding for visualization only (2D)
+# UMAP embedding for visualization only (2D).
 embedding_vis = umap.UMAP(n_components=2, metric='cosine', random_state=42).fit(tfidf_X)
 umap.plot.points(embedding_vis, labels=hover_df['category'])
 plt.gca().set_aspect('equal', 'datalim')

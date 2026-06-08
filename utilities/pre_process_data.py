@@ -1,3 +1,22 @@
+"""
+Preprocess raw tabular datasets into the project's standard processed format.
+
+This is a script-style file: running it reads raw files from `data/raw/tabular`
+and writes cleaned CSVs to `data/processed`. The processed files are later
+loaded by `utilities.generate_load_data.load_dataset`.
+
+The standard processed shape is:
+    feature columns..., class
+
+The evaluation loader later renames `class` to `y_true` and creates `y_live`
+seed labels. Some datasets are also converted to UMAP embeddings before saving
+so clustering can run on lower-dimensional representations.
+
+Because this file executes dataset processing blocks at top level, avoid
+importing it from experiment code unless you intentionally want to regenerate
+the processed CSV files.
+"""
+
 # %% Imports
 import os
 
@@ -133,6 +152,8 @@ def load_and_rename_class_column(filename: str, class_column: str) -> pd.DataFra
 
 
 # %% ------------- process the shuttle dataset -------------
+# Shuttle has several rare/ambiguous classes. This block maps selected classes
+# to -1 so they are treated as outliers/noise in later evaluations.
 df = pd.read_csv(_raw_path("shuttle_trn.csv"), header=None, sep=r'\s+')
 num_columns = df.shape[1]
 df.columns = [f"f{i+1}" for i in range(num_columns - 1)] + ['original_class']
@@ -162,6 +183,8 @@ _save_df(df, "ionosphere_with_class.csv")
 
 
 # %% ------------- process the ionosphere dataset using UMAP -------------
+# Save a 10-dimensional UMAP version for clustering experiments that use
+# reduced representations instead of the original high-dimensional features.
 df = pd.read_csv(_raw_path("ionosphere.csv"), header=None)
 num_columns = df.shape[1]
 df.columns = [f"f{i+1}" for i in range(num_columns - 1)] + ['class']
@@ -186,6 +209,8 @@ _save_df(df, "breast_cancer_class.csv")
 
 
 # %% UMAP processing for breast cancer dataset
+# This reduced version is available for experiments, though the main config may
+# choose either the original or UMAP-processed dataset.
 df = pd.read_csv(_raw_path("breast_cancer.csv"))
 df = _drop_unnamed_columns(df)
 df.drop(columns=["id"], inplace=True)
@@ -219,6 +244,8 @@ _save_df(df, "glass_with_class.csv")
 
 
 # %% ------------- process the yeast dataset -------------
+# Several small yeast classes are collapsed to -1 so evaluation can distinguish
+# retained clusters from treated-as-outlier classes.
 df = pd.read_csv(_raw_path("yeast.csv"), header=None, delim_whitespace=True)
 df.drop(columns=[0], inplace=True)
 df.columns = list(df.columns[:-1]) + ['class']
@@ -231,6 +258,8 @@ _save_df(df, "yeast_with_class.csv")
 
 
 # %% process covtype dataset
+# CovType is very large, so save a 10D UMAP representation for downstream
+# clustering rather than repeatedly clustering on all original dimensions.
 df = pd.read_csv(_raw_path("covtype.csv"))
 df = _drop_unnamed_columns(df)
 if 'Cover_Type' in df.columns:
